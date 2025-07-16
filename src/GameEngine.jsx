@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Player } from './player/Player.js';
 import { AssetLoader } from './utils/AssetLoader.js';
 import { AudioManager } from './utils/AudioManager.js';
+import { sharedAudioManager } from './utils/SharedAudioManager.js';
 import { WeaponManager } from './weapons/WeaponSystem.js';
 import { BulletSystem } from './utils/BulletSystem.js';
 import { InputManager } from './utils/InputManager.js';
@@ -741,7 +742,34 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showLoadoutScreen, setShowLoadoutScreen] = useState(false);
   const [mouseSensitivity, setMouseSensitivity] = useState(2.0);
+  const [soundVolume, setSoundVolume] = useState(0.3);
+  const [musicVolume, setMusicVolume] = useState(0.2);
   const [playerPosition, setPlayerPosition] = useState(null);
+
+  // Stop lobby music when game starts and sync volume controls
+  useEffect(() => {
+    // Stop lobby music when entering the game
+    sharedAudioManager.stopLobbyMusic();
+    console.log('🔇 Lobby music stopped - entering game');
+
+    // Sync volume controls with audio manager
+    sharedAudioManager.setSoundVolume(soundVolume);
+    sharedAudioManager.setMusicVolume(musicVolume);
+    
+    return () => {
+      // Clean up when component unmounts
+      console.log('🧹 GameEngine cleanup');
+    };
+  }, []);
+
+  // Update audio manager volumes when state changes
+  useEffect(() => {
+    sharedAudioManager.setSoundVolume(soundVolume);
+  }, [soundVolume]);
+
+  useEffect(() => {
+    sharedAudioManager.setMusicVolume(musicVolume);
+  }, [musicVolume]);
 
   // Game state ref - moved to main component so buttons can access it
   const gameStateRef = useRef({
@@ -1104,6 +1132,71 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
                 <button onClick={() => setMouseSensitivity(2.0)} style={{ padding: '6px 10px', backgroundColor: 'rgba(78, 205, 196, 0.2)', border: '1px solid #4ecdc4', borderRadius: '5px', color: '#4ecdc4', fontSize: '11px', cursor: 'pointer' }}>2.0x</button>
                 <button onClick={() => setMouseSensitivity(5.0)} style={{ padding: '6px 10px', backgroundColor: 'rgba(255, 230, 109, 0.2)', border: '1px solid #ffe66d', borderRadius: '5px', color: '#ffe66d', fontSize: '11px', cursor: 'pointer' }}>5.0x</button>
                 <button onClick={() => setMouseSensitivity(10.0)} style={{ padding: '6px 10px', backgroundColor: 'rgba(255, 92, 192, 0.2)', border: '1px solid #ff5cc0', borderRadius: '5px', color: '#ff5cc0', fontSize: '11px', cursor: 'pointer' }}>10.0x</button>
+              </div>
+            </div>
+
+            {/* Sound Volume Controls */}
+            <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '15px', fontSize: '18px', color: '#ff6b6b' }}>
+                🔊 Sound Effects Volume
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundVolume}
+                  onChange={(e) => {
+                    const newVolume = parseFloat(e.target.value);
+                    setSoundVolume(newVolume);
+                  }}
+                  style={{
+                    flex: 1,
+                    height: '8px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    borderRadius: '4px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                />
+                <span style={{ color: '#ff6b6b', fontSize: '16px', fontWeight: 'bold', minWidth: '60px' }}>
+                  {Math.round(soundVolume * 100)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Music Volume Controls */}
+            <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '15px', fontSize: '18px', color: '#95e1d3' }}>
+                🎵 Music Volume
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={musicVolume}
+                  onChange={(e) => {
+                    const newVolume = parseFloat(e.target.value);
+                    setMusicVolume(newVolume);
+                  }}
+                  style={{
+                    flex: 1,
+                    height: '8px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    borderRadius: '4px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                />
+                <span style={{ color: '#95e1d3', fontSize: '16px', fontWeight: 'bold', minWidth: '60px' }}>
+                  {Math.round(musicVolume * 100)}%
+                </span>
+              </div>
+              <div style={{ fontSize: '12px', color: '#ccc', marginTop: '8px' }}>
+                {musicVolume === 0 ? '🔇 Music is muted' : '🎵 Affects lobby background music'}
               </div>
             </div>
 

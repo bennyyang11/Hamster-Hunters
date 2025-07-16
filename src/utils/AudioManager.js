@@ -1,10 +1,14 @@
-// Audio manager for weapon sound effects
+// Audio manager for weapon sound effects and lobby music
 export class AudioManager {
   constructor() {
     this.audioContext = null;
-    this.masterVolume = 0.3; // Reduce volume for better gameplay experience
+    this.masterVolume = 0.3; // For sound effects
+    this.musicVolume = 0.2; // For background music (lower by default)
     this.weaponSounds = new Map();
     this.currentlyPlayingAudio = new Map();
+    this.lobbyMusic = null;
+    this.lobbyMusicSource = null;
+    this.lobbyMusicGain = null;
     this.initialized = false;
   }
 
@@ -18,6 +22,106 @@ export class AudioManager {
       console.log('🔊 Audio system initialized');
     } catch (error) {
       console.error('❌ Failed to initialize audio:', error);
+    }
+  }
+
+  // Load lobby music
+  async loadLobbyMusic() {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    try {
+      console.log('🎵 Loading lobby music...');
+      
+      const response = await fetch('/assets/audio/jazz-lounge-elevator-music-332339.mp3');
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      
+      this.lobbyMusic = audioBuffer;
+      console.log('✅ Lobby music loaded successfully');
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to load lobby music:', error);
+      return false;
+    }
+  }
+
+  // Start playing lobby music
+  async startLobbyMusic() {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!this.lobbyMusic) {
+      await this.loadLobbyMusic();
+    }
+
+    if (!this.lobbyMusic) {
+      console.warn('⚠️ Lobby music not available');
+      return;
+    }
+
+    // Stop existing lobby music if playing
+    this.stopLobbyMusic();
+
+    try {
+      // Resume audio context if suspended (required by modern browsers)
+      if (this.audioContext.state === 'suspended') {
+        console.log('🔊 Resuming suspended audio context...');
+        await this.audioContext.resume();
+      }
+
+      this.lobbyMusicSource = this.audioContext.createBufferSource();
+      this.lobbyMusicGain = this.audioContext.createGain();
+
+      // Setup audio chain: source -> gain -> destination
+      this.lobbyMusicSource.buffer = this.lobbyMusic;
+      this.lobbyMusicSource.connect(this.lobbyMusicGain);
+      this.lobbyMusicGain.connect(this.audioContext.destination);
+      
+      // Set volume and looping
+      this.lobbyMusicGain.gain.value = this.musicVolume;
+      this.lobbyMusicSource.loop = true;
+      
+      // Start playback
+      this.lobbyMusicSource.start(0);
+      
+      console.log(`🎵 Lobby music started - Volume: ${Math.round(this.musicVolume * 100)}% - Audio Context State: ${this.audioContext.state}`);
+    } catch (error) {
+      console.error('❌ Failed to start lobby music:', error);
+      throw error; // Re-throw so the calling code can handle it
+    }
+  }
+
+  // Stop lobby music
+  stopLobbyMusic() {
+    if (this.lobbyMusicSource) {
+      try {
+        // Fade out smoothly
+        if (this.lobbyMusicGain) {
+          this.lobbyMusicGain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.5);
+        }
+        
+        // Stop after fade
+        setTimeout(() => {
+          try {
+            if (this.lobbyMusicSource) {
+              this.lobbyMusicSource.stop();
+            }
+          } catch (e) {
+            // Source might already be stopped
+          }
+          this.lobbyMusicSource = null;
+          this.lobbyMusicGain = null;
+        }, 500);
+        
+      } catch (error) {
+        console.warn('⚠️ Error stopping lobby music:', error);
+      }
+      
+      console.log('🔇 Lobby music stopped');
     }
   }
 
@@ -111,25 +215,55 @@ export class AudioManager {
     return this.startWeaponAudio(weaponName, false); // No looping
   }
 
-  // Stop all currently playing audio
+  // Stop all currently playing audio (weapons only, not lobby music)
   stopAllAudio() {
     for (const weaponName of this.currentlyPlayingAudio.keys()) {
       this.stopWeaponAudio(weaponName);
     }
   }
 
-  // Set master volume
-  setVolume(volume) {
+  // Stop everything including lobby music
+  stopEverything() {
+    this.stopAllAudio();
+    this.stopLobbyMusic();
+  }
+
+  // Set sound effects volume
+  setSoundVolume(volume) {
     this.masterVolume = Math.max(0, Math.min(1, volume));
     
-    // Update volume for currently playing audio
+    // Update volume for currently playing weapon audio
     for (const { gainNode } of this.currentlyPlayingAudio.values()) {
       gainNode.gain.value = this.masterVolume;
     }
   }
 
+  // Set music volume
+  setMusicVolume(volume) {
+    this.musicVolume = Math.max(0, Math.min(1, volume));
+    
+    // Update volume for currently playing lobby music
+    if (this.lobbyMusicGain) {
+      this.lobbyMusicGain.gain.value = this.musicVolume;
+    }
+  }
+
+  // Get current volumes
+  getSoundVolume() {
+    return this.masterVolume;
+  }
+
+  getMusicVolume() {
+    return this.musicVolume;
+  }
+
   // Check if weapon audio is currently playing
   isPlaying(weaponName) {
     return this.currentlyPlayingAudio.has(weaponName);
+  }
+
+  // Check if lobby music is playing
+  isLobbyMusicPlaying() {
+    return this.lobbyMusicSource !== null;
   }
 } 

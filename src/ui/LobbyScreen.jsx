@@ -1,7 +1,8 @@
-import React, { useState, useRef, Suspense } from 'react';
+import React, { useState, useRef, Suspense, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { sharedAudioManager, initializeAudio } from '../utils/SharedAudioManager.js';
 
 // Preload the assets for better performance
 useGLTF.preload('/hamster.glb');
@@ -679,6 +680,45 @@ function TeamSelectionScreen({ onTeamSelect, onBack, selectedGameMode }) {
 // Main Lobby Screen Component
 export function LobbyScreen({ onStartGame, onBack }) {
   const [showGameModes, setShowGameModes] = useState(false);
+  const [audioStarted, setAudioStarted] = useState(false);
+
+  // Start lobby music when component mounts
+  useEffect(() => {
+    const startMusic = async () => {
+      try {
+        await initializeAudio();
+        await sharedAudioManager.startLobbyMusic();
+        setAudioStarted(true);
+        console.log('🎵 Lobby music started successfully');
+      } catch (error) {
+        console.warn('⚠️ Could not start lobby music (likely browser policy):', error);
+        setAudioStarted(false);
+      }
+    };
+
+    startMusic();
+
+    // Cleanup: stop lobby music when component unmounts
+    return () => {
+      sharedAudioManager.stopLobbyMusic();
+      console.log('🔇 Lobby music stopped on cleanup');
+    };
+  }, []);
+
+  // Handle user interaction to start audio
+  const handleUserInteraction = async () => {
+    if (!audioStarted) {
+      try {
+        console.log('👆 User clicked - attempting to start audio...');
+        await initializeAudio();
+        await sharedAudioManager.startLobbyMusic();
+        setAudioStarted(true);
+        console.log('🎵 Lobby music started after user interaction');
+      } catch (error) {
+        console.error('❌ Failed to start lobby music:', error);
+      }
+    }
+  };
 
   const handlePlayGame = () => {
     setShowGameModes(true);
@@ -694,12 +734,15 @@ export function LobbyScreen({ onStartGame, onBack }) {
   };
 
   return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
+    <div 
+      style={{
+        width: '100vw',
+        height: '100vh',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+      onClick={handleUserInteraction}
+    >
       {/* 3D Background Scene */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
         <Suspense fallback={<LoadingScreen />}>
@@ -770,6 +813,24 @@ export function LobbyScreen({ onStartGame, onBack }) {
           }}>
             Elite Hamster Warfare Academy
           </p>
+          
+          {/* Audio Status Notification */}
+          {!audioStarted && (
+            <div style={{
+              marginTop: '10px',
+              padding: '8px 12px',
+              backgroundColor: 'rgba(255, 193, 7, 0.9)',
+              border: '1px solid #ffc107',
+              borderRadius: '8px',
+              fontSize: '12px',
+              color: '#000',
+              fontWeight: 'bold',
+              textAlign: 'center',
+              animation: 'pulse 2s infinite'
+            }}>
+              🔊 Click anywhere to enable audio!
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}

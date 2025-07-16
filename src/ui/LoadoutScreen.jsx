@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { sharedAudioManager, initializeAudio } from '../utils/SharedAudioManager.js';
 
 // Define the 4 hamster warfare classes with their weapons
 const HAMSTER_CLASSES = {
@@ -47,6 +48,41 @@ const HAMSTER_CLASSES = {
 export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selectedTeam }) {
   const [selectedClass, setSelectedClass] = useState(null);
   const [hoveredClass, setHoveredClass] = useState(null);
+  const [audioStarted, setAudioStarted] = useState(false);
+
+  // Ensure lobby music is playing
+  useEffect(() => {
+    const startMusic = async () => {
+      try {
+        await initializeAudio();
+        if (!sharedAudioManager.isLobbyMusicPlaying()) {
+          await sharedAudioManager.startLobbyMusic();
+          console.log('🎵 Lobby music started in loadout screen');
+        }
+        setAudioStarted(true);
+      } catch (error) {
+        console.warn('⚠️ Could not start lobby music in loadout:', error);
+        setAudioStarted(false);
+      }
+    };
+
+    startMusic();
+  }, []);
+
+  // Handle user interaction to start audio
+  const handleUserInteraction = async () => {
+    if (!audioStarted) {
+      try {
+        console.log('👆 User clicked - attempting to start audio in loadout...');
+        await initializeAudio();
+        await sharedAudioManager.startLobbyMusic();
+        setAudioStarted(true);
+        console.log('🎵 Lobby music started after user interaction in loadout');
+      } catch (error) {
+        console.error('❌ Failed to start lobby music in loadout:', error);
+      }
+    }
+  };
 
   const handleClassSelect = (className) => {
     setSelectedClass(className);
@@ -60,14 +96,17 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
   };
 
   return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
-      overflow: 'hidden'
-    }}>
+    <div 
+      style={{
+        width: '100vw',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        fontFamily: 'Arial, sans-serif',
+        overflow: 'hidden'
+      }}
+      onClick={handleUserInteraction}
+    >
       <div style={{
         width: '100%',
         height: '100%',
@@ -91,6 +130,25 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
         }}>
           🐹 HAMSTER WARFARE 🔫
         </h1>
+        
+        {/* Audio Status Notification */}
+        {!audioStarted && (
+          <div style={{
+            marginTop: '10px',
+            marginBottom: '10px',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(255, 193, 7, 0.9)',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            fontSize: '14px',
+            color: '#000',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            display: 'inline-block'
+          }}>
+            🔊 Click anywhere to enable audio!
+          </div>
+        )}
         
         {/* Game Mode Display */}
         {selectedGameMode && (
