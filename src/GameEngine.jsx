@@ -137,6 +137,250 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         
         player.socket = socket;
         
+        // Store reference to all other players
+        const otherPlayers = new Map();
+
+        // Helper functions for multiplayer (DEFINE BEFORE USING)
+        function createOtherPlayer(playerData, scene, assetLoader, otherPlayers) {
+          console.log(`🐹 Creating mesh for other player: ${playerData.id}`);
+          
+          try {
+            // Try to use the loaded hamster model
+            const hamsterModel = assetLoader?.getModel("hamster");
+            let playerMesh;
+            
+            if (hamsterModel) {
+              // Use the loaded hamster.glb model
+              playerMesh = hamsterModel.clone();
+              console.log('✅ Using loaded hamster.glb model for other player');
+              
+              // Scale the hamster to LARGE size
+              playerMesh.scale.set(75.0, 75.0, 75.0);
+              
+                          // Keep natural hamster colors (no team coloring)
+            // All hamsters will look the same regardless of team
+              
+                        // Set initial hamster rotation based on player data
+          const initialRotation = playerData.rotation?.y || 0;
+          playerMesh.rotation.y = Math.PI + initialRotation; // Add π to account for hamster facing direction
+              
+            } else {
+              // Fallback: Create a geometric hamster
+              console.log('⚠️ Using fallback geometry for other player');
+              const bodyGeometry = new THREE.CapsuleGeometry(30, 60, 4, 8);
+              const teamColor = playerData.team === 'wheel-warriors' ? 0x4080ff : 0xff6040;
+              const bodyMaterial = new THREE.MeshLambertMaterial({ color: teamColor });
+              
+              playerMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            }
+            
+                      // Position the mesh
+          console.log(`🔍 Positioning other player with data:`, playerData.position);
+          const xPos = playerData.position?.x || 0;
+          const yPos = playerData.position?.y || 40;
+          const zPos = playerData.position?.z || 0;
+          
+          playerMesh.position.set(xPos, yPos, zPos);
+          console.log(`📍 Set mesh position to: (${xPos}, ${yPos}, ${zPos})`);
+            
+            playerMesh.castShadow = true;
+            playerMesh.receiveShadow = true;
+            
+                      // Add name label above player
+          const nameLabel = createPlayerNameLabel(playerData.character || playerData.id, playerData.team);
+          nameLabel.position.set(0, 100, 0); // Above the hamster
+          playerMesh.add(nameLabel);
+          
+          // Add weapon to other player
+          addWeaponToOtherPlayer(playerMesh, playerData, assetLoader);
+          
+          // Add to scene
+          scene.add(playerMesh);
+            
+            // Store player data
+            const otherPlayerData = {
+              id: playerData.id,
+              mesh: playerMesh,
+              character: playerData.character,
+              team: playerData.team,
+              position: new THREE.Vector3(
+                playerData.position?.x || 0,
+                playerData.position?.y || 40,
+                playerData.position?.z || 0
+              ),
+              rotation: { y: playerData.rotation?.y || 0 }
+            };
+            
+            otherPlayers.set(playerData.id, otherPlayerData);
+            console.log(`👥 ✅ Created other player mesh: ${playerData.id} (${playerData.team})`);
+            console.log(`📍 Player positioned at: (${playerMesh.position.x}, ${playerMesh.position.y}, ${playerMesh.position.z})`);
+            console.log(`🎬 Added to scene. Scene children count: ${scene.children.length}`);
+            
+          } catch (error) {
+            console.error(`❌ Failed to create other player mesh:`, error);
+          }
+        }
+
+        function updateOtherPlayer(playerData, otherPlayers) {
+          const otherPlayer = otherPlayers.get(playerData.id);
+          if (otherPlayer) {
+            // Update position if provided
+            if (playerData.position) {
+              otherPlayer.position.copy(playerData.position);
+              if (otherPlayer.mesh) {
+                otherPlayer.mesh.position.copy(playerData.position);
+              }
+            }
+            
+            // Check if character class has changed
+            const oldCharacter = otherPlayer.character;
+            const newCharacter = playerData.character || otherPlayer.character;
+            
+            // Update other properties
+            otherPlayer.character = newCharacter;
+            otherPlayer.team = playerData.team || otherPlayer.team;
+            
+            // If character class changed, update weapon
+            if (oldCharacter !== newCharacter && otherPlayer.mesh) {
+              console.log(`🔫 Character class changed from "${oldCharacter}" to "${newCharacter}" - updating weapon`);
+              
+              // Remove old weapon(s) from mesh
+              const weaponsToRemove = [];
+              otherPlayer.mesh.traverse((child) => {
+                if (child.userData && child.userData.isWeapon) {
+                  weaponsToRemove.push(child);
+                }
+              });
+              weaponsToRemove.forEach(weapon => {
+                otherPlayer.mesh.remove(weapon);
+              });
+              
+              // Add new weapon based on updated character class
+              addWeaponToOtherPlayer(otherPlayer.mesh, { 
+                id: playerData.id, 
+                character: newCharacter,
+                class: playerData.class || newCharacter
+              }, assetLoader);
+            }
+            
+            console.log(`👥 Updated other player: ${playerData.id}`);
+          }
+        }
+
+        function removeOtherPlayer(playerId, scene, otherPlayers) {
+          const otherPlayer = otherPlayers.get(playerId);
+          if (otherPlayer && otherPlayer.mesh) {
+            scene.remove(otherPlayer.mesh);
+            otherPlayers.delete(playerId);
+            console.log(`👥 ❌ Removed other player: ${playerId}`);
+          }
+        }
+
+        function createPlayerNameLabel(playerName, team) {
+          // Create a simple plane for the name label
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.width = 256;
+          canvas.height = 64;
+          
+          // Set background and text
+          context.fillStyle = team === 'wheel-warriors' ? '#4080ff' : '#ff6040';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          
+          context.fillStyle = 'white';
+          context.font = 'bold 24px Arial';
+          context.textAlign = 'center';
+          context.fillText(playerName, canvas.width / 2, canvas.height / 2 + 8);
+          
+          // Create texture and material
+          const texture = new THREE.CanvasTexture(canvas);
+          const material = new THREE.MeshBasicMaterial({ 
+            map: texture, 
+            transparent: true,
+            side: THREE.DoubleSide
+          });
+          
+          const geometry = new THREE.PlaneGeometry(40, 10);
+          const nameMesh = new THREE.Mesh(geometry, material);
+          
+          return nameMesh;
+        }
+
+        function addWeaponToOtherPlayer(playerMesh, playerData, assetLoader) {
+          try {
+            // Get primary weapon based on character class
+            const characterClass = playerData.character || playerData.class;
+            let weaponKey = 'ak47'; // Default weapon
+            
+            // Map character classes to their primary weapons (corrected)
+            if (characterClass?.includes('Tactical Chewer')) {
+              weaponKey = 'scarh';
+            } else if (characterClass?.includes('Fluff')) {
+              weaponKey = 'ak47';
+            } else if (characterClass?.includes('Squeak')) {
+              weaponKey = 'mini_uzi';
+            } else if (characterClass?.includes('Guns and Whiskers')) {
+              weaponKey = 'aug_a1'; // Fixed: was mini_uzi, should be aug_a1
+            }
+            
+            console.log(`🔫 Adding weapon ${weaponKey} to other player ${playerData.id}`);
+            
+            // Get the weapon model using the same method as WeaponSystem
+            let weaponModel = null;
+            if (assetLoader?.weaponModels?.has(weaponKey)) {
+              weaponModel = assetLoader.weaponModels.get(weaponKey);
+            } else if (assetLoader?.getModel) {
+              weaponModel = assetLoader.getModel(weaponKey);
+            }
+            
+            if (weaponModel) {
+              const weaponMesh = weaponModel.clone();
+              
+              // Reset transformations to ensure clean state
+              weaponMesh.scale.set(1, 1, 1);
+              weaponMesh.position.set(0, 0, 0);
+              weaponMesh.rotation.set(0, 0, 0);
+              weaponMesh.matrix.identity();
+              weaponMesh.updateMatrix();
+              
+              // Use the same weapon-specific scaling as WeaponSystem.js
+              const weaponScales = {
+                'ak47': 1.05,       // AK-47 made bigger
+                'scarh': 0.2,       // SCAR-H 
+                'an94': 0.25,       // AN-94 
+                'aug_a1': 0.22,     // AUG A1 
+                'mp5': 0.18,        // MP5 
+                'mini_uzi': 0.16,   // Mini UZI 
+                'spas12': 0.28,     // SPAS-12 
+                'model870': 0.2,    // Model 870 
+                'default': 0.2      // Fallback
+              };
+              
+              const weaponScale = weaponScales[weaponKey] || weaponScales['default'];
+              weaponMesh.scale.setScalar(weaponScale);
+              
+              // Use the same positioning as WeaponSystem.js
+              weaponMesh.position.set(0.3, 0.05, 0.1); // Right side, slightly forward
+              
+              // Use the same rotation as WeaponSystem.js (minimal rotation to point forward)
+              weaponMesh.rotation.set(-0.1, 0, 0.1); // NOT Math.PI/2 which points sideways
+              
+              // Mark weapon for identification
+              weaponMesh.userData.isWeapon = true;
+              weaponMesh.userData.weaponType = weaponKey;
+              
+              // Add weapon to player mesh
+              playerMesh.add(weaponMesh);
+              
+              console.log(`🔫 ✅ Added ${weaponKey} weapon to other player ${playerData.id} (scale: ${weaponScale})`);
+            } else {
+              console.log(`⚠️ Weapon model ${weaponKey} not available for other player`);
+            }
+          } catch (error) {
+            console.error(`❌ Failed to add weapon to other player:`, error);
+          }
+        }
+        
         // Listen for spawn position from server
         socket.on('spawnPosition', (data) => {
           console.log(`🎯 ✅ RECEIVED spawn position from server:`, data.position);
@@ -156,15 +400,102 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             console.log(`❌ Could not update player position - data.position:`, data.position, `player:`, player);
           }
         });
+
+        // Listen for other players joining
+        socket.on('playerJoined', (playerData) => {
+          console.log(`🔔 RECEIVED playerJoined event:`, playerData);
+          if (playerData.id !== socket.id) {
+            console.log(`👥 OTHER PLAYER JOINED: ${playerData.id}`, playerData);
+            console.log(`📍 Other player position:`, playerData.position);
+            console.log(`🏷️ Other player team:`, playerData.team);
+            createOtherPlayer(playerData, scene, assetLoader, otherPlayers);
+          } else {
+            console.log(`👤 Ignoring own join event: ${playerData.id}`);
+          }
+        });
+
+        // Listen for other player updates
+        socket.on('playerUpdated', (playerData) => {
+          console.log(`🔔 RECEIVED playerUpdated event:`, playerData);
+          if (playerData.id !== socket.id) {
+            console.log(`👥 OTHER PLAYER UPDATED: ${playerData.id}`, playerData);
+            updateOtherPlayer(playerData, otherPlayers);
+          } else {
+            console.log(`👤 Ignoring own update event: ${playerData.id}`);
+          }
+        });
+
+        // Listen for other players moving
+        socket.on('playerMoved', (moveData) => {
+          // Log movement updates less frequently to avoid console spam
+          if (Math.random() < 0.05) { // 5% of updates
+            console.log(`🔔 RECEIVED playerMoved event from ${moveData.id}:`, moveData.position);
+          }
+          if (moveData.id !== socket.id) {
+            const otherPlayer = otherPlayers.get(moveData.id);
+            if (otherPlayer) {
+              // Smoothly update other player position
+              otherPlayer.position.set(moveData.position.x, moveData.position.y, moveData.position.z);
+              otherPlayer.rotation.y = moveData.rotation.y;
+              
+              // Update the mesh position and rotation
+              if (otherPlayer.mesh) {
+                otherPlayer.mesh.position.set(moveData.position.x, moveData.position.y, moveData.position.z);
+                // Apply Y rotation (horizontal turning) to the hamster mesh
+                otherPlayer.mesh.rotation.y = Math.PI + moveData.rotation.y; // Add π to account for hamster facing direction
+              }
+            } else {
+              console.log(`❌ No other player found with ID: ${moveData.id}`);
+            }
+          } else {
+            console.log(`👤 Ignoring own movement event: ${moveData.id}`);
+          }
+        });
+
+        // Listen for players leaving
+        socket.on('playerLeft', (playerId) => {
+          console.log(`👥 PLAYER LEFT: ${playerId}`);
+          removeOtherPlayer(playerId, scene, otherPlayers);
+        });
+
+        // Listen for initial game state with existing players
+        socket.on('gameState', (gameStateData) => {
+          console.log(`🔔 RECEIVED gameState event:`, gameStateData);
+          console.log(`👥 Total players in game state: ${gameStateData.players?.length || 0}`);
+          console.log(`🆔 My socket ID: ${socket.id}`);
+          
+          // Create meshes for all existing players
+          if (gameStateData.players) {
+            gameStateData.players.forEach(playerData => {
+              console.log(`🔍 Processing player: ${playerData.id} (team: ${playerData.team})`);
+              if (playerData.id !== socket.id) {
+                console.log(`👥 CREATING EXISTING PLAYER: ${playerData.id}`, playerData);
+                createOtherPlayer(playerData, scene, assetLoader, otherPlayers);
+              } else {
+                console.log(`👤 Skipping own player: ${playerData.id}`);
+              }
+            });
+          }
+          
+          console.log(`👥 Other players map size after processing: ${otherPlayers.size}`);
+        });
         
         // Add connection event listener
         socket.on('connect', () => {
           console.log(`🌐 ✅ Socket connected with ID: ${socket.id}`);
+          console.log(`👥 Multiplayer system ready - listening for other players...`);
         });
         
         socket.on('disconnect', () => {
           console.log(`🌐 ❌ Socket disconnected`);
         });
+
+        // Send heartbeat every 10 seconds to keep connection active
+        setInterval(() => {
+          if (socket.connected) {
+            socket.emit('heartbeat');
+          }
+        }, 10000);
         
         // Send player join data with team information
         if (selectedGameMode && selectedGameMode.id === 'hamster-havoc' && selectedTeam) {

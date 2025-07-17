@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export class TestDummy {
-  constructor(scene, assetLoader, position = new THREE.Vector3(0, 40, 0)) {
+  constructor(scene, assetLoader, position = new THREE.Vector3(0, 40, 0), showHitbox = false) {
     this.scene = scene;
     this.assetLoader = assetLoader;
     this.position = position;
@@ -11,6 +11,7 @@ export class TestDummy {
     this.health = 100;
     this.maxHealth = 100;
     this.isActive = false;
+    this.showHitbox = showHitbox; // Debug option to visualize hitbox
     
     console.log('🎯 Test dummy initialized');
     this.createTestDummy();
@@ -36,21 +37,40 @@ export class TestDummy {
         // Add a slight rotation for better visibility
         this.mesh.rotation.y = Math.PI / 4; // 45 degree rotation
         
-        // Create hitbox (bounding box for collision detection)
-        const box = new THREE.Box3().setFromObject(this.mesh);
-        const size = box.getSize(new THREE.Vector3());
+        // Get the actual bounding box of the hamster model to align hitbox properly
+        this.mesh.updateMatrixWorld();
+        const modelBoundingBox = new THREE.Box3().setFromObject(this.mesh);
+        const modelSize = modelBoundingBox.getSize(new THREE.Vector3());
+        const modelCenter = modelBoundingBox.getCenter(new THREE.Vector3());
         
-        // Create invisible hitbox geometry
-        const hitboxGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+        console.log(`🐹 Hamster model size: ${modelSize.x.toFixed(1)} × ${modelSize.y.toFixed(1)} × ${modelSize.z.toFixed(1)}`);
+        console.log(`🐹 Hamster model center: (${modelCenter.x.toFixed(1)}, ${modelCenter.y.toFixed(1)}, ${modelCenter.z.toFixed(1)})`);
+        console.log(`🐹 Hamster model bounds: min(${modelBoundingBox.min.y.toFixed(1)}) max(${modelBoundingBox.max.y.toFixed(1)})`);
+        
+        // Create hitbox that covers the hamster body and head precisely
+        // Model bounds often include extra space, so be more conservative
+        const hitboxWidth = modelSize.x * 0.6;   // 60% of model width
+        const hitboxHeight = modelSize.y * 0.65; // 65% of model height (tighter to actual hamster)
+        const hitboxDepth = modelSize.z * 0.6;   // 60% of model depth
+        
+        // Create hitbox geometry - aligned with model bounds
+        const hitboxGeometry = new THREE.BoxGeometry(hitboxWidth, hitboxHeight, hitboxDepth);
         const hitboxMaterial = new THREE.MeshBasicMaterial({ 
           color: 0xff0000, 
           transparent: true, 
-          opacity: 0.0, // Invisible
-          wireframe: false
+          opacity: this.showHitbox ? 0.3 : 0.0, // Visible in debug mode
+          wireframe: this.showHitbox
         });
         
         this.hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
-        this.hitbox.position.copy(this.position);
+        // Position hitbox slightly lower than model center to focus on hamster body/head area
+        const hitboxCenter = modelCenter.clone();
+        hitboxCenter.y = modelCenter.y - (modelSize.y * 0.1); // Lower by 10% of model height
+        this.hitbox.position.copy(hitboxCenter);
+        
+                                   console.log(`📦 Created precise hitbox: ${hitboxWidth.toFixed(1)}×${hitboxHeight.toFixed(1)}×${hitboxDepth.toFixed(1)} units`);
+          console.log(`📦 Model center: (${modelCenter.x.toFixed(1)}, ${modelCenter.y.toFixed(1)}, ${modelCenter.z.toFixed(1)})`);
+          console.log(`📦 Hitbox positioned at: (${hitboxCenter.x.toFixed(1)}, ${hitboxCenter.y.toFixed(1)}, ${hitboxCenter.z.toFixed(1)})`);
         
         // Add to scene
         this.scene.add(this.mesh);
@@ -87,15 +107,21 @@ export class TestDummy {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.copy(this.position);
     
-    // Create hitbox
-    const hitboxGeometry = new THREE.SphereGeometry(30, 8, 6);
+    // Create precise hitbox for fallback dummy - proportional to visual sphere
+    const visualRadius = 25;
+    const hitboxRadius = visualRadius * 0.8; // 80% of visual size for precision
+    const hitboxGeometry = new THREE.SphereGeometry(hitboxRadius, 8, 6);
     const hitboxMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xff0000, 
       transparent: true, 
-      opacity: 0.0
+      opacity: this.showHitbox ? 0.3 : 0.0, // Visible in debug mode
+      wireframe: this.showHitbox
     });
     this.hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
     this.hitbox.position.copy(this.position);
+    
+    console.log(`📦 Created precise fallback hitbox: ${hitboxRadius.toFixed(1)} unit radius sphere`);
+    console.log(`📦 Fallback hitbox positioned at: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
     
     this.scene.add(this.mesh);
     this.scene.add(this.hitbox);
@@ -243,29 +269,106 @@ export class TestDummy {
     animate();
   }
 
-  // Check if a bullet hits this dummy
-  checkBulletHit(bulletPosition, bulletRadius = 5) {
+  // Toggle hitbox visibility for debugging
+  toggleHitboxVisibility() {
+    this.showHitbox = !this.showHitbox;
+    if (this.hitbox) {
+      this.hitbox.material.opacity = this.showHitbox ? 0.3 : 0.0;
+      this.hitbox.material.wireframe = this.showHitbox;
+      console.log(`🔍 Hitbox visibility: ${this.showHitbox ? 'ON' : 'OFF'}`);
+      if (this.showHitbox) {
+        console.log(`🔍 Hitbox position: (${this.hitbox.position.x.toFixed(1)}, ${this.hitbox.position.y.toFixed(1)}, ${this.hitbox.position.z.toFixed(1)})`);
+        if (this.mesh) {
+          console.log(`🔍 Model position: (${this.mesh.position.x.toFixed(1)}, ${this.mesh.position.y.toFixed(1)}, ${this.mesh.position.z.toFixed(1)})`);
+        }
+      }
+    }
+  }
+
+  // Enable hitbox visibility for debugging head shots
+  enableHitboxDebug() {
+    this.showHitbox = true;
+    if (this.hitbox) {
+      this.hitbox.material.opacity = 0.5; // More visible for debugging
+      this.hitbox.material.wireframe = true;
+      console.log('🔍 DEBUG MODE: Hitbox now visible for head shot debugging');
+      console.log(`🔍 Aim for the RED BOX to hit the dummy`);
+      
+      // Show hitbox boundaries
+      const hitboxBounds = new THREE.Box3().setFromObject(this.hitbox);
+      console.log(`🔍 Hitbox Y boundaries: ${hitboxBounds.min.y.toFixed(1)} (bottom) to ${hitboxBounds.max.y.toFixed(1)} (top)`);
+      console.log(`🔍 Hitbox height: ${(hitboxBounds.max.y - hitboxBounds.min.y).toFixed(1)} units`);
+    }
+  }
+
+  // Check if a bullet hits this dummy - using ray-based collision for accurate long-distance shots
+  checkBulletHit(bulletPosition, bulletDirection = null, bulletRadius = 5, bulletSpeed = 50) {
     if (!this.isActive || !this.hitbox) {
       return false;
     }
     
-    // Calculate distance from bullet to dummy center
-    const distance = bulletPosition.distanceTo(this.position);
-    const hitRadius = 500; // MASSIVE hit radius for long-distance testing - easier to hit from far away
-    
-    console.log(`🔍 Bullet at (${bulletPosition.x.toFixed(1)}, ${bulletPosition.y.toFixed(1)}, ${bulletPosition.z.toFixed(1)})`);
-    console.log(`🎯 Dummy at (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
-    console.log(`📏 Distance: ${distance.toFixed(1)}, Hit radius: ${hitRadius}`);
-    
-    // Simple distance-based hit detection
-    const hit = distance <= hitRadius;
-    
-    if (hit) {
-      console.log('🎯 HIT! Bullet struck test dummy!');
-      this.takeDamage(25); // 25 damage per hit
-      return true;
-    } else {
-      console.log('🚫 Miss - bullet too far from dummy');
+    // Use precise hitbox for collision detection
+    if (this.hitbox) {
+      // Create a ray from bullet position in the direction it's traveling
+      if (bulletDirection) {
+        // Ray-based collision detection for moving bullets
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(bulletPosition, bulletDirection.normalize());
+        
+        // Check intersection with the hitbox
+        const intersects = raycaster.intersectObject(this.hitbox);
+        
+        if (intersects.length > 0) {
+          // Check if intersection is within reasonable bullet travel distance
+          const intersection = intersects[0];
+          const distanceToHit = intersection.distance;
+          
+                     // Allow hits within bullet speed range (accounts for frame rate variations)
+           if (distanceToHit <= bulletSpeed * 1.2) {
+            console.log(`🎯 RAY HIT! Bullet intersected test dummy at distance ${distanceToHit.toFixed(1)}`);
+            console.log(`🔍 Bullet: (${bulletPosition.x.toFixed(1)}, ${bulletPosition.y.toFixed(1)}, ${bulletPosition.z.toFixed(1)})`);
+            console.log(`🎯 Hit Point: (${intersection.point.x.toFixed(1)}, ${intersection.point.y.toFixed(1)}, ${intersection.point.z.toFixed(1)})`);
+            this.takeDamage(25);
+            return true;
+          }
+        }
+      }
+      
+             // Fallback: Check if bullet is close to the hitbox (for stationary or slow bullets)
+       const boundingBox = new THREE.Box3().setFromObject(this.hitbox);
+       
+       // Expand bounding box slightly for bullet radius only
+       const expansion = bulletRadius + 3; // Minimal expansion for precise hit detection
+       boundingBox.expandByScalar(expansion);
+      
+      const hit = boundingBox.containsPoint(bulletPosition);
+      
+      if (hit) {
+        console.log(`🎯 PROXIMITY HIT! Bullet within expanded hitbox`);
+        console.log(`🔍 Bullet: (${bulletPosition.x.toFixed(1)}, ${bulletPosition.y.toFixed(1)}, ${bulletPosition.z.toFixed(1)})`);
+        console.log(`📦 Expanded BBox: min(${boundingBox.min.x.toFixed(1)}, ${boundingBox.min.y.toFixed(1)}, ${boundingBox.min.z.toFixed(1)}) max(${boundingBox.max.x.toFixed(1)}, ${boundingBox.max.y.toFixed(1)}, ${boundingBox.max.z.toFixed(1)})`);
+        this.takeDamage(25);
+        return true;
+      }
+      
+      // Only log misses occasionally to avoid console spam
+      if (Math.random() < 0.1) {
+        console.log('🚫 Miss - bullet ray/proximity missed dummy hitbox');
+      }
+      return false;
+      
+          } else {
+       // Fallback to distance-based detection
+       const distance = bulletPosition.distanceTo(this.position);
+       const hitRadius = 20; // Precise hit radius for competitive gameplay
+      
+      const hit = distance <= hitRadius;
+      
+      if (hit) {
+        console.log('🎯 HIT! (fallback distance detection)');
+        this.takeDamage(25);
+        return true;
+      }
       return false;
     }
   }

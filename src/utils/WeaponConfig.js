@@ -1,107 +1,115 @@
 // Weapon configuration system for Hamster Hunter
 export const WEAPON_STATS = {
-  // SMGs
+  // SMGs - High rate of fire, lower damage
   'mini_uzi': {
     name: 'Mini UZI',
     model: '/assets/models/weapons/low_poly_mini_uzi.glb',
-    damage: 25,
-    fireRate: 600, // rounds per minute
+    damage: 22,
+    fireRate: 80, // ms between shots (750 RPM)
     range: 30,
     accuracy: 0.7,
     mobility: 0.9,
     ammo: 32,
     reloadTime: 2.0,
-    type: 'SMG'
+    type: 'SMG',
+    pellets: 1
   },
   'mp5': {
     name: 'MP5',
     model: '/assets/models/weapons/low_poly_mp5.glb',
-    damage: 30,
-    fireRate: 500,
+    damage: 28,
+    fireRate: 100, // ms between shots (600 RPM)
     range: 35,
     accuracy: 0.8,
     mobility: 0.8,
     ammo: 30,
     reloadTime: 2.2,
-    type: 'SMG'
+    type: 'SMG',
+    pellets: 1
   },
   
-  // Assault Rifles
+  // Assault Rifles - Balanced rate of fire and damage
   'ak47': {
     name: 'AK-47',
     model: '/assets/models/weapons/low_poly_ak47.glb',
-    damage: 40,
-    fireRate: 400,
+    damage: 35,
+    fireRate: 150, // ms between shots (400 RPM)
     range: 60,
     accuracy: 0.7,
     mobility: 0.6,
     ammo: 30,
     reloadTime: 2.5,
-    type: 'Assault Rifle'
+    type: 'Assault Rifle',
+    pellets: 1
   },
   'an94': {
     name: 'AN-94',
     model: '/assets/models/weapons/low_poly_an94.glb',
-    damage: 38,
-    fireRate: 450,
+    damage: 33,
+    fireRate: 130, // ms between shots (460 RPM)
     range: 65,
     accuracy: 0.8,
     mobility: 0.6,
     ammo: 30,
     reloadTime: 2.4,
-    type: 'Assault Rifle'
+    type: 'Assault Rifle',
+    pellets: 1
   },
   
-  // Precision/Tactical
+  // Precision/Tactical - Slow rate of fire, high damage
   'scar_h': {
     name: 'SCAR-H',
     model: '/assets/models/weapons/low_poly_scarh.glb',
-    damage: 50,
-    fireRate: 300,
+    damage: 55,
+    fireRate: 300, // ms between shots (200 RPM)
     range: 80,
     accuracy: 0.9,
     mobility: 0.5,
     ammo: 20,
     reloadTime: 2.8,
-    type: 'Battle Rifle'
+    type: 'Battle Rifle',
+    pellets: 1
   },
   'aug_a1': {
     name: 'AUG A1',
     model: '/assets/models/weapons/lowpoly_aug_a1.glb',
-    damage: 35,
-    fireRate: 450,
+    damage: 38,
+    fireRate: 120, // ms between shots (500 RPM)
     range: 55,
     accuracy: 0.85,
     mobility: 0.7,
     ammo: 30,
     reloadTime: 2.3,
-    type: 'Assault Rifle'
+    type: 'Assault Rifle',
+    pellets: 1
   },
   
-  // Shotguns
+  // Shotguns - Very slow rate of fire, multiple pellets, devastating close range
   'spas12': {
     name: 'SPAS-12',
     model: '/assets/models/weapons/low_poly_spas12.glb',
-    damage: 80,
-    fireRate: 120,
+    damage: 25, // per pellet
+    fireRate: 800, // ms between shots (75 RPM)
     range: 20,
     accuracy: 0.5,
     mobility: 0.4,
     ammo: 8,
     reloadTime: 3.0,
-    type: 'Shotgun'
+    type: 'Shotgun',
+    pellets: 8 // 8 pellets per shot
   },
   'model870': {
     name: 'Model 870',
     model: '/assets/models/weapons/low_poly_model870.glb',
-    damage: 85,
-    fireRate: 100,
+    damage: 30, // per pellet
+    fireRate: 1200, // ms between shots (50 RPM)
     range: 25,
     accuracy: 0.6,
     mobility: 0.4,
     ammo: 6,
     reloadTime: 3.5,
-    type: 'Shotgun'
+    type: 'Shotgun',
+    pellets: 6 // 6 pellets per shot
   }
 };
 

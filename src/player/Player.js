@@ -64,6 +64,10 @@ export class Player {
     this.damage = 1.0;
     this.accuracy = 1.0;
     
+    // Network sync properties
+    this.networkUpdateRate = 50; // Send updates every 50ms (20 FPS)
+    this.lastNetworkUpdate = 0;
+    
     // Create weapon manager with AssetLoader and camera
     this.weaponManager = new WeaponManager(this.scene, this.assetLoader, this.camera);
     
@@ -504,11 +508,6 @@ export class Player {
   }
 
   shoot() {
-    // Get direction directly from camera to match crosshair exactly
-    const cameraDirection = new THREE.Vector3();
-    this.camera.getWorldDirection(cameraDirection);
-    const direction = cameraDirection.normalize();
-    
     // Get player accuracy from character stats
     const playerAccuracy = this.finalStats?.accuracy || 1.0;
     
@@ -525,9 +524,36 @@ export class Player {
     
     const bulletStartPosition = this.position.clone().add(weaponOffset);
     
-    // DEBUG: Log player position when firing
-    console.log(`🔫 PLAYER POSITION when firing: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
-    console.log(`🔫 BULLET START POSITION: (${bulletStartPosition.x.toFixed(1)}, ${bulletStartPosition.y.toFixed(1)}, ${bulletStartPosition.z.toFixed(1)})`);
+    // CROSSHAIR-ACCURATE AIMING: Raycast from camera through crosshair to find target point
+    const raycaster = new THREE.Raycaster();
+    const cameraNormalizedCoords = new THREE.Vector2(0, 0); // Center of screen (crosshair position)
+    raycaster.setFromCamera(cameraNormalizedCoords, this.camera);
+    
+    // Check for intersections with objects in the scene (more realistic aiming)
+    const intersects = raycaster.intersectObjects(this.scene.children, true);
+    
+    let targetPoint;
+    if (intersects.length > 0) {
+      // Aim at the first object hit by the crosshair raycast
+      targetPoint = intersects[0].point;
+      console.log(`🎯 Crosshair targeting object at: (${targetPoint.x.toFixed(1)}, ${targetPoint.y.toFixed(1)}, ${targetPoint.z.toFixed(1)})`);
+    } else {
+      // No objects hit, aim at maximum range
+      const maxRange = 5000;
+      targetPoint = raycaster.ray.origin.clone().add(
+        raycaster.ray.direction.clone().multiplyScalar(maxRange)
+      );
+      console.log(`🎯 Crosshair aiming at max range: (${targetPoint.x.toFixed(1)}, ${targetPoint.y.toFixed(1)}, ${targetPoint.z.toFixed(1)})`);
+    }
+    
+    // Calculate direction from weapon to crosshair target point
+    const direction = targetPoint.clone().sub(bulletStartPosition).normalize();
+    
+    // DEBUG: Log aiming information
+    console.log(`🔫 CAMERA POSITION: (${this.camera.position.x.toFixed(1)}, ${this.camera.position.y.toFixed(1)}, ${this.camera.position.z.toFixed(1)})`);
+    console.log(`🔫 WEAPON POSITION: (${bulletStartPosition.x.toFixed(1)}, ${bulletStartPosition.y.toFixed(1)}, ${bulletStartPosition.z.toFixed(1)})`);
+    console.log(`🎯 TARGET POINT: (${targetPoint.x.toFixed(1)}, ${targetPoint.y.toFixed(1)}, ${targetPoint.z.toFixed(1)})`);
+    console.log(`🔫 BULLET DIRECTION: (${direction.x.toFixed(3)}, ${direction.y.toFixed(3)}, ${direction.z.toFixed(3)})`);
     
     // Fire using weapon manager
     const shot = this.weaponManager.fire(bulletStartPosition, direction, playerAccuracy);
@@ -593,10 +619,22 @@ export class Player {
     if (now - this.lastNetworkUpdate > this.networkUpdateRate) {
       this.lastNetworkUpdate = now;
       
-      if (this.socket) {
+      if (this.socket && this.socket.connected) {
+        // Log movement updates less frequently to avoid console spam
+        if (Math.random() < 0.1) { // 10% of updates
+          console.log(`🌐 Sending movement update: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
+        }
         this.socket.emit('playerMove', {
-          position: this.position.clone(),
-          rotation: this.cameraRotation.clone()
+          position: {
+            x: this.position.x,
+            y: this.position.y,
+            z: this.position.z
+          },
+          rotation: {
+            x: this.cameraRotation.x,
+            y: this.cameraRotation.y,
+            z: this.cameraRotation.z
+          }
         });
       }
     }

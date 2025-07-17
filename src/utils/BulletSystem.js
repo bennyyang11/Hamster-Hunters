@@ -8,7 +8,7 @@ export class BulletSystem {
     this.bullets = [];
     this.bulletModel = null;
     this.maxBullets = 100; // Bullet pooling for performance
-    this.bulletSpeed = 2000; // MUCH faster bullets for long-distance combat
+    this.bulletSpeed = 10000; // Ultra-fast bullets for competitive gameplay (5x faster)
     this.bulletLifetime = 10.0; // Bullets can travel much farther (10 seconds)
     
     console.log('🔫 Bullet system initialized');
@@ -94,10 +94,14 @@ export class BulletSystem {
 
   getBulletScale(weaponType) {
     const scaleMap = {
-      'rifle': 1.5,      // AK47, SCAR-H, AN94
-      'smg': 1.0,        // MP5, UZI
-      'shotgun': 2.0,    // Model 870, SPAS-12  
-      'precision': 2.5,  // AUG A1
+      'SMG': 0.8,            // MP5, UZI - small, fast bullets
+      'Assault Rifle': 1.2,  // AK47, AN94 - medium bullets
+      'Battle Rifle': 1.8,   // SCAR-H - large, powerful bullets
+      'Shotgun': 0.6,        // Model 870, SPAS-12 - pellets (smaller per pellet)
+      'rifle': 1.5,          // Fallback compatibility
+      'smg': 1.0,            // Fallback compatibility
+      'shotgun': 2.0,        // Fallback compatibility  
+      'precision': 2.5,      // Fallback compatibility
       'default': 1.2
     };
     
@@ -165,7 +169,7 @@ export class BulletSystem {
   checkBulletCollision(bullet) {
     // Check test dummy collision first (if it exists) - BEFORE ground collision
     if (this.testDummy && this.testDummy.isActive) {
-      if (this.testDummy.checkBulletHit(bullet.mesh.position)) {
+      if (this.testDummy.checkBulletHit(bullet.mesh.position, bullet.direction, 5, this.bulletSpeed)) {
         console.log('🎯 💥 BULLET HIT CLOSE TEST DUMMY! Removing bullet.');
         return true; // Bullet hit dummy, remove bullet
       }
@@ -173,7 +177,7 @@ export class BulletSystem {
     
     // Check far test dummy collision too
     if (this.farTestDummy && this.farTestDummy.isActive) {
-      if (this.farTestDummy.checkBulletHit(bullet.mesh.position)) {
+      if (this.farTestDummy.checkBulletHit(bullet.mesh.position, bullet.direction, 5, this.bulletSpeed)) {
         console.log('🎯 💥 BULLET HIT FAR TEST DUMMY! Long-distance shot successful!');
         return true; // Bullet hit far dummy, remove bullet
       }

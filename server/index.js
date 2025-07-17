@@ -91,6 +91,7 @@ io.on('connection', (socket) => {
       io.emit('playerUpdated', {
         id: socket.id,
         character: player.character,
+        class: player.class, // Also include class explicitly
         team: player.team,
         gameMode: player.gameMode,
         position: player.position  // Include spawn position
@@ -112,6 +113,14 @@ io.on('connection', (socket) => {
         position: data.position,
         rotation: data.rotation
       });
+    }
+  });
+
+  // Handle heartbeat to keep players active
+  socket.on('heartbeat', () => {
+    const player = players.get(socket.id);
+    if (player) {
+      player.lastUpdate = Date.now();
     }
   });
 
@@ -305,7 +314,7 @@ function respawnPlayer(playerId) {
 // Game loop for cleanup and updates
 setInterval(() => {
   const now = Date.now();
-  const timeoutMs = 30000; // 30 seconds timeout
+  const timeoutMs = 300000; // 5 minutes timeout (much longer for testing)
   
   // Remove inactive players
   players.forEach((player, id) => {

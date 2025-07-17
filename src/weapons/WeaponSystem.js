@@ -13,6 +13,8 @@ export class Weapon {
     this.spread = config.spread || 0.02; // Bullet spread
     this.projectileSpeed = config.projectileSpeed || 10000000; // 100x faster - ultra-instantaneous hit
     this.color = config.color || 0xffff00;
+    this.pellets = config.pellets || 1; // Number of pellets per shot (for shotguns)
+    this.type = config.type || 'Rifle'; // Weapon type
     
     // Current state
     this.currentAmmo = this.ammoCapacity;
@@ -35,25 +37,39 @@ export class Weapon {
 
     // Apply weapon accuracy and player accuracy
     const finalAccuracy = this.accuracy * accuracy;
-    const spreadAmount = this.spread * (1 - finalAccuracy);
+    const baseSpread = this.spread * (1 - finalAccuracy);
     
-    // Add random spread
-    const spreadX = (Math.random() - 0.5) * spreadAmount;
-    const spreadY = (Math.random() - 0.5) * spreadAmount;
+    // For shotguns, increase spread significantly
+    const spreadMultiplier = this.type === 'Shotgun' ? 4.0 : 1.0;
+    const spreadAmount = baseSpread * spreadMultiplier;
     
-    const finalDirection = direction.clone();
-    finalDirection.x += spreadX;
-    finalDirection.y += spreadY;
-    finalDirection.normalize();
+    const shots = [];
+    
+    // Fire multiple pellets for shotguns
+    for (let i = 0; i < this.pellets; i++) {
+      // Add random spread for each pellet
+      const spreadX = (Math.random() - 0.5) * spreadAmount;
+      const spreadY = (Math.random() - 0.5) * spreadAmount;
+      
+      const finalDirection = direction.clone();
+      finalDirection.x += spreadX;
+      finalDirection.y += spreadY;
+      finalDirection.normalize();
 
-    return {
-      position: position.clone(),
-      direction: finalDirection,
-      damage: this.damage,
-      range: this.range,
-      speed: this.projectileSpeed,
-      weapon: this.name
-    };
+      shots.push({
+        position: position.clone(),
+        direction: finalDirection,
+        damage: this.damage,
+        range: this.range,
+        speed: this.projectileSpeed,
+        weapon: this.name,
+        weaponType: this.type,
+        pelletIndex: i
+      });
+    }
+
+    // Return single shot for non-shotguns, array for shotguns
+    return this.pellets === 1 ? shots[0] : shots;
   }
 
   reload() {
@@ -413,10 +429,21 @@ export class WeaponManager {
     if (shot) {
       this.createMuzzleFlash(position);
       
-      // Fire bullet using bullet system if available
-      if (this.bulletSystem) {
-        this.bulletSystem.fireBullet(shot.position, shot.direction, this.currentWeapon.weaponType);
-        console.log(`🔫 Fired ${this.currentWeapon.name} bullet!`);
+      // Handle multiple pellets for shotguns
+      if (Array.isArray(shot)) {
+        // Shotgun - fire multiple pellets
+        if (this.bulletSystem) {
+          shot.forEach((pellet, index) => {
+            this.bulletSystem.fireBullet(pellet.position, pellet.direction, this.currentWeapon.weaponType);
+          });
+          console.log(`🔫 Fired ${this.currentWeapon.name} with ${shot.length} pellets!`);
+        }
+      } else {
+        // Single bullet
+        if (this.bulletSystem) {
+          this.bulletSystem.fireBullet(shot.position, shot.direction, this.currentWeapon.weaponType);
+          console.log(`🔫 Fired ${this.currentWeapon.name} bullet!`);
+        }
       }
       
       return shot;
