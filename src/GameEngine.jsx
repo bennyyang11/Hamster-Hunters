@@ -14,6 +14,7 @@ import { BulletSystem } from './utils/BulletSystem.js';
 import { InputManager } from './utils/InputManager.js';
 import { TestDummy } from './utils/TestDummy.js';
 import { HamsterHavoc } from './gamemodes/GameMode.js';
+import { RenderOptimizer } from './utils/RenderOptimizer.js';
 
 // Get class weapons data
 function getClassWeapons(selectedClass) {
@@ -67,6 +68,10 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
       const bulletSystem = new BulletSystem(scene, assetLoader);
       const weaponManager = new WeaponManager(scene, assetLoader, camera, bulletSystem);
       const gameMode = new HamsterHavoc();
+      
+      // Initialize render optimizer for performance
+      const renderOptimizer = new RenderOptimizer(camera, gl);
+      console.log('🎯 Render optimizer initialized for performance monitoring and LOD');
 
       // Load hamster character model FIRST (before creating player)
       console.log('📦 Loading hamster character model...');
@@ -77,14 +82,14 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         console.warn('⚠️ Could not load hamster model, will use fallback');
       }
 
-      // Setup camera for third-person with extended view distance
+      // Setup camera for third-person with optimized view distance
       camera.position.set(0, 5, 10);
       camera.rotation.set(-0.2, 0, 0); // Look slightly downward
       camera.fov = 75;
       camera.near = 0.1; // Close clipping plane
-      camera.far = 5000; // Far clipping plane - much further for large maps
+      camera.far = 1000; // Optimized far clipping plane (reduced from 5000)
       camera.updateProjectionMatrix();
-      console.log('📷 Camera configured with extended view distance (far: 5000)');
+      console.log('📷 Camera configured with optimized view distance (far: 1000) for better performance');
 
       // Disable fog to ensure clear long-distance visibility
       scene.fog = null;
@@ -425,24 +430,45 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           }
         });
 
-        // Listen for other players moving
+        // Listen for other players moving (optimized)
         socket.on('playerMoved', (moveData) => {
           // Log movement updates less frequently to avoid console spam
-          if (Math.random() < 0.05) { // 5% of updates
-            console.log(`🔔 RECEIVED playerMoved event from ${moveData.id}:`, moveData.position);
+          if (Math.random() < 0.02) { // 2% of updates (reduced from 5%)
+            console.log(`🔔 RECEIVED optimized playerMoved event from ${moveData.id}`);
           }
           if (moveData.id !== socket.id) {
             const otherPlayer = otherPlayers.get(moveData.id);
             if (otherPlayer) {
-              // Smoothly update other player position
-              otherPlayer.position.set(moveData.position.x, moveData.position.y, moveData.position.z);
-              otherPlayer.rotation.y = moveData.rotation.y;
+              // Handle compressed movement data
+              let position, rotation;
+              
+              if (moveData.pos && moveData.rot) {
+                // Compressed format
+                position = {
+                  x: moveData.pos[0],
+                  y: moveData.pos[1],
+                  z: moveData.pos[2]
+                };
+                rotation = {
+                  x: moveData.rot[0],
+                  y: moveData.rot[1],
+                  z: moveData.rot[2]
+                };
+              } else {
+                // Legacy format fallback
+                position = moveData.position;
+                rotation = moveData.rotation;
+              }
+              
+              // Smoothly update other player position with interpolation
+              otherPlayer.position.lerp(new THREE.Vector3(position.x, position.y, position.z), 0.2);
+              otherPlayer.rotation.y = rotation.y;
               
               // Update the mesh position and rotation
               if (otherPlayer.mesh) {
-                otherPlayer.mesh.position.set(moveData.position.x, moveData.position.y, moveData.position.z);
+                otherPlayer.mesh.position.copy(otherPlayer.position);
                 // Apply Y rotation (horizontal turning) to the hamster mesh
-                otherPlayer.mesh.rotation.y = Math.PI + moveData.rotation.y; // Add π to account for hamster facing direction
+                otherPlayer.mesh.rotation.y = Math.PI + rotation.y; // Add π to account for hamster facing direction
               }
             } else {
               console.log(`❌ No other player found with ID: ${moveData.id}`);
@@ -602,6 +628,7 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         inputManager,
         gameMode,
         testDummy,
+        renderOptimizer,
         isInitialized: true
       };
 
@@ -702,6 +729,11 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
     // Update game mode
     if (gameState.gameMode && gameState.gameMode.isActive) {
       gameState.gameMode.update();
+    }
+
+    // Update render optimizations
+    if (gameState.renderOptimizer) {
+      gameState.renderOptimizer.update(scene);
     }
 
     // ESC key is now handled by settings menu

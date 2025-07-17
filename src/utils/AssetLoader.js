@@ -19,39 +19,176 @@ export class AssetLoader {
     // Create weaponModels as a Map for weapon system compatibility
     this.weaponModels = new Map();
     
+    // Performance optimizations
+    this.assetCache = new Map(); // Cache for processed assets
+    this.loadingPromises = new Map(); // Track loading promises to avoid duplicates
+    this.compressionSupport = this.checkCompressionSupport();
+    
+    // Loading progress tracking
+    this.loadingProgress = {
+      total: 0,
+      loaded: 0,
+      percentage: 0,
+      currentAsset: '',
+      callbacks: []
+    };
+    
     this.setupLoadingCallbacks();
   }
 
   setupLoadingCallbacks() {
     this.loadingManager.onLoad = () => {
+      this.loadingProgress.percentage = 100;
+      this.loadingProgress.currentAsset = 'Complete';
+      this.notifyProgressCallbacks();
       console.log('🎮 All assets loaded successfully!');
     };
     
     this.loadingManager.onProgress = (url, loaded, total) => {
-      console.log(`📦 Loading: ${url} (${loaded}/${total})`);
+      const progress = (loaded / total) * 100;
+      this.loadingProgress.total = total;
+      this.loadingProgress.loaded = loaded;
+      this.loadingProgress.percentage = progress;
+      this.loadingProgress.currentAsset = this.getAssetName(url);
+      this.notifyProgressCallbacks();
+      
+      console.log(`📦 Loading: ${this.loadingProgress.currentAsset} (${loaded}/${total}) ${progress.toFixed(1)}%`);
     };
     
     this.loadingManager.onError = (url) => {
       console.error(`❌ Failed to load: ${url}`);
+      this.notifyProgressCallbacks();
     };
   }
 
-  // Load 3D weapon models
+  // Check compression support for better asset loading
+  checkCompressionSupport() {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    
+    return {
+      astc: !!gl?.getExtension('WEBGL_compressed_texture_astc'),
+      etc: !!gl?.getExtension('WEBGL_compressed_texture_etc'),
+      pvrtc: !!gl?.getExtension('WEBGL_compressed_texture_pvrtc'),
+      s3tc: !!gl?.getExtension('WEBGL_compressed_texture_s3tc')
+    };
+  }
+
+  // Extract asset name from URL for progress display
+  getAssetName(url) {
+    return url.split('/').pop()?.split('.')[0] || 'Unknown Asset';
+  }
+
+  // Add progress callback
+  onProgress(callback) {
+    this.loadingProgress.callbacks.push(callback);
+  }
+
+  // Remove progress callback
+  removeProgressCallback(callback) {
+    const index = this.loadingProgress.callbacks.indexOf(callback);
+    if (index > -1) {
+      this.loadingProgress.callbacks.splice(index, 1);
+    }
+  }
+
+  // Notify all progress callbacks
+  notifyProgressCallbacks() {
+    this.loadingProgress.callbacks.forEach(callback => {
+      try {
+        callback(this.loadingProgress);
+      } catch (error) {
+        console.warn('Error in progress callback:', error);
+      }
+    });
+  }
+
+  // Get current loading progress
+  getProgress() {
+    return { ...this.loadingProgress };
+  }
+
+  // Load 3D weapon models with caching and optimization
   async loadWeaponModel(weaponName, modelPath) {
+    // Check cache first
+    const cacheKey = `weapon_${weaponName}`;
+    if (this.assetCache.has(cacheKey)) {
+      console.log(`🔫 Using cached weapon model: ${weaponName}`);
+      return this.assetCache.get(cacheKey);
+    }
+
+    // Check if already loading to prevent duplicates
+    if (this.loadingPromises.has(cacheKey)) {
+      console.log(`🔫 Waiting for weapon model already loading: ${weaponName}`);
+      return this.loadingPromises.get(cacheKey);
+    }
+
+    // Start loading
+    const loadingPromise = this.loadWeaponModelInternal(weaponName, modelPath);
+    this.loadingPromises.set(cacheKey, loadingPromise);
+
     try {
-      const gltf = await this.loadGLTF(modelPath);
-      const weaponModel = gltf.scene;
+      const weaponModel = await loadingPromise;
+      
+      // Cache the result
+      this.assetCache.set(cacheKey, weaponModel);
       
       // Store in both places for compatibility
       this.loadedAssets.models[weaponName] = weaponModel;
       this.weaponModels.set(weaponName, weaponModel);
       
-      console.log(`🔫 Loaded weapon model: ${weaponName}`);
+      console.log(`🔫 Loaded and cached weapon model: ${weaponName}`);
       return weaponModel;
     } catch (error) {
       console.error(`Failed to load weapon ${weaponName}:`, error);
       return this.createFallbackWeapon(weaponName);
+    } finally {
+      // Clean up loading promise
+      this.loadingPromises.delete(cacheKey);
     }
+  }
+
+  // Internal weapon loading method
+  async loadWeaponModelInternal(weaponName, modelPath) {
+    const gltf = await this.loadGLTF(modelPath);
+    const weaponModel = gltf.scene;
+    
+    // Optimize model for better performance
+    this.optimizeModel(weaponModel);
+    
+    return weaponModel;
+  }
+
+  // Optimize loaded models for better performance
+  optimizeModel(model) {
+    model.traverse((child) => {
+      if (child.isMesh) {
+        // Enable frustum culling
+        child.frustumCulled = true;
+        
+        // Optimize geometry
+        if (child.geometry) {
+          child.geometry.computeBoundingSphere();
+          child.geometry.computeBoundingBox();
+          
+          // Merge vertices if possible (for better performance)
+          if (child.geometry.index === null) {
+            child.geometry.mergeVertices();
+          }
+        }
+        
+        // Optimize materials
+        if (child.material) {
+          // Ensure materials are not transparent unless needed
+          if (child.material.transparent && child.material.opacity >= 1.0) {
+            child.material.transparent = false;
+          }
+          
+          // Enable material caching
+          child.material.needsUpdate = false;
+        }
+      }
+    });
   }
 
   // Load map/environment models

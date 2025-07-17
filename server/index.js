@@ -99,19 +99,41 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle player movement updates
+  // Handle player movement updates (optimized for compressed data)
   socket.on('playerMove', (data) => {
     const player = players.get(socket.id);
     if (player && player.isAlive) {
-      player.position = data.position;
-      player.rotation = data.rotation;
+      // Handle both compressed and uncompressed data
+      let position, rotation;
+      
+      if (data.pos && data.rot) {
+        // Compressed data format
+        position = {
+          x: data.pos[0],
+          y: data.pos[1],
+          z: data.pos[2]
+        };
+        rotation = {
+          x: data.rot[0],
+          y: data.rot[1],
+          z: data.rot[2]
+        };
+      } else {
+        // Legacy uncompressed format
+        position = data.position;
+        rotation = data.rotation;
+      }
+      
+      player.position = position;
+      player.rotation = rotation;
       player.lastUpdate = Date.now();
       
-      // Broadcast to other players
+      // Broadcast compressed data to other players
       socket.broadcast.emit('playerMoved', {
         id: socket.id,
-        position: data.position,
-        rotation: data.rotation
+        pos: [position.x, position.y, position.z],
+        rot: [rotation.x, rotation.y, rotation.z],
+        t: data.t || Date.now()
       });
     }
   });

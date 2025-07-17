@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { HAMSTER_CHARACTERS, getCharacterMeshColor, calculateFinalStats, getRandomCharacter, getRandomClass } from './HamsterCharacters.js';
 import { WeaponManager, getWeaponForClass } from '../weapons/WeaponSystem.js';
+import { NetworkOptimizer, MovementPredictor } from '../utils/NetworkOptimizer.js';
 
 export class Player {
   constructor(id, character, combatClass, position, scene, assetLoader = null, camera = null) {
@@ -64,9 +65,13 @@ export class Player {
     this.damage = 1.0;
     this.accuracy = 1.0;
     
-    // Network sync properties
-    this.networkUpdateRate = 50; // Send updates every 50ms (20 FPS)
+    // Network sync properties (optimized)
+    this.networkUpdateRate = 50; // Fallback rate, actual rate controlled by optimizer
     this.lastNetworkUpdate = 0;
+    
+    // Network optimization
+    this.networkOptimizer = new NetworkOptimizer();
+    this.movementPredictor = new MovementPredictor();
     
     // Create weapon manager with AssetLoader and camera
     this.weaponManager = new WeaponManager(this.scene, this.assetLoader, this.camera);
@@ -615,27 +620,22 @@ export class Player {
   }
 
   networkSync() {
-    const now = Date.now();
-    if (now - this.lastNetworkUpdate > this.networkUpdateRate) {
-      this.lastNetworkUpdate = now;
+    if (!this.socket || !this.socket.connected) return;
+    
+    // Use network optimizer to determine if we should send an update
+    if (this.networkOptimizer.shouldSendUpdate(this.position, this.cameraRotation)) {
+      // Compress the data to reduce packet size
+      const compressedData = this.networkOptimizer.compressPlayerData(this.position, this.cameraRotation);
       
-      if (this.socket && this.socket.connected) {
-        // Log movement updates less frequently to avoid console spam
-        if (Math.random() < 0.1) { // 10% of updates
-          console.log(`🌐 Sending movement update: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
-        }
-        this.socket.emit('playerMove', {
-          position: {
-            x: this.position.x,
-            y: this.position.y,
-            z: this.position.z
-          },
-          rotation: {
-            x: this.cameraRotation.x,
-            y: this.cameraRotation.y,
-            z: this.cameraRotation.z
-          }
-        });
+      // Send optimized update
+      this.socket.emit('playerMove', compressedData);
+      
+      // Update optimizer tracking
+      this.networkOptimizer.updateSentData(this.position, this.cameraRotation);
+      
+      // Log movement updates less frequently to avoid console spam
+      if (Math.random() < 0.05) { // 5% of updates (reduced from 10%)
+        console.log(`🌐 Optimized movement update: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
       }
     }
   }
@@ -646,13 +646,37 @@ export class Player {
     // UI updates are handled automatically through the React weapon stats system
   }
 
-  // Update this player from network data
+  // Update this player from network data with prediction
   updateFromNetwork(data) {
     if (this.playerId === 'local_player') return;
     
-    // Smoothly interpolate position
-    this.position.lerp(data.position, 0.1);
-    this.rotation.copy(data.rotation);
+    // If data is compressed, decompress it
+    let decompressedData = data;
+    if (data.pos && data.rot) {
+      decompressedData = this.networkOptimizer.decompressPlayerData(data);
+    }
+    
+    // Add state to movement predictor for smooth interpolation
+    this.movementPredictor.addServerState(decompressedData);
+    
+    // Get interpolated state for smoother movement
+    const interpolatedState = this.movementPredictor.getInterpolatedState();
+    if (interpolatedState) {
+      // Smoothly interpolate to predicted position
+      this.position.lerp(new THREE.Vector3(
+        interpolatedState.position.x,
+        interpolatedState.position.y,
+        interpolatedState.position.z
+      ), 0.15); // Slightly higher lerp factor for more responsive movement
+      
+      // Update rotation
+      this.rotation.copy(interpolatedState.rotation);
+    }
+    
+    // Clean up old prediction states periodically
+    if (Math.random() < 0.01) { // 1% chance per update
+      this.movementPredictor.cleanup();
+    }
   }
 
   // Remove player from scene
