@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { sharedAudioManager, initializeAudio } from '../utils/SharedAudioManager.js';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATIONS, COMPONENTS, mergeStyles, createClassColorStyle } from './DesignSystem.js';
+import { Breadcrumb, Button, Card, Header, SelectionDisplay, Notification, WeaponStats } from './components/UIComponents.jsx';
 
-// Define the 4 hamster warfare classes with their weapons
+// Define the 4 hamster warfare classes with their weapons and stats
 const HAMSTER_CLASSES = {
   'Tactical Chewer': {
     name: 'Tactical Chewer',
@@ -11,7 +13,17 @@ const HAMSTER_CLASSES = {
     secondaryWeapon: 'model870',
     weapons: ['low_poly_scarh.glb', 'low_poly_model870.glb'],
     specialties: ['Long-range precision', 'Heavy firepower'],
-    color: '#4ecdc4'
+    color: '#4ecdc4',
+    stats: {
+      health: '●●●●○',
+      speed: '●●○○○', 
+      damage: '●●●●●',
+      accuracy: '●●●●●'
+    },
+    weaponStats: {
+      scarh: { damage: '●●●●●', range: '●●●●●', fireRate: '●●○○○', accuracy: '●●●●○' },
+      model870: { damage: '●●●●●', range: '●●○○○', fireRate: '●○○○○', accuracy: '●●●○○' }
+    }
   },
   'Fluff \'n\' reload': {
     name: 'Fluff \'n\' reload',
@@ -21,7 +33,17 @@ const HAMSTER_CLASSES = {
     secondaryWeapon: 'mp5',
     weapons: ['low_poly_ak47.glb', 'low_poly_mp5.glb'],
     specialties: ['High rate of fire', 'Mobile assault'],
-    color: '#ff6b6b'
+    color: '#ff6b6b',
+    stats: {
+      health: '●●●○○',
+      speed: '●●●●○',
+      damage: '●●●○○',
+      accuracy: '●●●○○'
+    },
+    weaponStats: {
+      ak47: { damage: '●●●○○', range: '●●●○○', fireRate: '●●●●○', accuracy: '●●○○○' },
+      mp5: { damage: '●●○○○', range: '●●○○○', fireRate: '●●●●●', accuracy: '●●●○○' }
+    }
   },
   'Squeak or be Squeakened': {
     name: 'Squeak or be Squeakened',
@@ -31,7 +53,17 @@ const HAMSTER_CLASSES = {
     secondaryWeapon: 'spas12',
     weapons: ['low_poly_mini_uzi.glb', 'low_poly_spas12.glb'],
     specialties: ['Close quarters', 'High mobility'],
-    color: '#ffe66d'
+    color: '#ffe66d',
+    stats: {
+      health: '●●○○○',
+      speed: '●●●●●',
+      damage: '●●●○○',
+      accuracy: '●●○○○'
+    },
+    weaponStats: {
+      mini_uzi: { damage: '●●○○○', range: '●○○○○', fireRate: '●●●●●', accuracy: '●○○○○' },
+      spas12: { damage: '●●●●●', range: '●○○○○', fireRate: '●○○○○', accuracy: '●●○○○' }
+    }
   },
   'Guns and Whiskers': {
     name: 'Guns and Whiskers',
@@ -41,7 +73,17 @@ const HAMSTER_CLASSES = {
     secondaryWeapon: 'an94',
     weapons: ['lowpoly_aug_a1.glb', 'low_poly_an94.glb'],
     specialties: ['Elite precision', 'Advanced tactics'],
-    color: '#95e1d3'
+    color: '#95e1d3',
+    stats: {
+      health: '●●●●○',
+      speed: '●●●○○',
+      damage: '●●●●○',
+      accuracy: '●●●●●'
+    },
+    weaponStats: {
+      aug_a1: { damage: '●●●○○', range: '●●●●○', fireRate: '●●●○○', accuracy: '●●●●●' },
+      an94: { damage: '●●●●○', range: '●●●●○', fireRate: '●●●●○', accuracy: '●●●●○' }
+    }
   }
 };
 
@@ -49,6 +91,10 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
   const [selectedClass, setSelectedClass] = useState(null);
   const [hoveredClass, setHoveredClass] = useState(null);
   const [audioStarted, setAudioStarted] = useState(false);
+
+  // Breadcrumb steps
+  const breadcrumbSteps = ['Game Mode', 'Team Selection', 'Class Selection', 'Deploy'];
+  const currentStep = selectedTeam ? 2 : 1; // Adjust based on whether team was selected
 
   // Ensure lobby music is playing
   useEffect(() => {
@@ -100,9 +146,9 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
       style={{
         width: '100vw',
         height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        fontFamily: 'Arial, sans-serif',
+        background: COLORS.background.primary,
+        color: COLORS.text.primary,
+        fontFamily: TYPOGRAPHY.fontFamily.primary,
         overflow: 'hidden'
       }}
       onClick={handleUserInteraction}
@@ -111,169 +157,154 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
         width: '100%',
         height: '100%',
         overflowY: 'scroll',
-        padding: '15px',
+        padding: SPACING.base,
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center'
       }}>
       
-      {/* Header */}
-      <div style={{
-        textAlign: 'center',
-        marginBottom: '15px'
-      }}>
-        <h1 style={{
-          fontSize: '32px',
-          margin: '5px 0 5px 0',
-          textShadow: '3px 3px 6px rgba(0,0,0,0.5)'
-        }}>
-          🐹 HAMSTER WARFARE 🔫
-        </h1>
-        
-        {/* Audio Status Notification */}
-        {!audioStarted && (
-          <div style={{
-            marginTop: '10px',
-            marginBottom: '10px',
-            padding: '8px 12px',
-            backgroundColor: 'rgba(255, 193, 7, 0.9)',
-            border: '1px solid #ffc107',
-            borderRadius: '8px',
-            fontSize: '14px',
-            color: '#000',
-            fontWeight: 'bold',
-            textAlign: 'center',
-            display: 'inline-block'
-          }}>
-            🔊 Click anywhere to enable audio!
-          </div>
-        )}
-        
-        {/* Game Mode Display */}
-        {selectedGameMode && (
-          <div style={{
-            background: `linear-gradient(135deg, ${selectedGameMode.color}20, ${selectedGameMode.color}40)`,
-            border: `2px solid ${selectedGameMode.color}`,
-            borderRadius: '10px',
-            padding: '10px 20px',
-            margin: '10px 0',
-            display: 'inline-block'
-          }}>
-            <span style={{ fontSize: '20px', marginRight: '8px' }}>{selectedGameMode.icon}</span>
-            <span style={{ color: selectedGameMode.color, fontWeight: 'bold', fontSize: '18px' }}>
-              {selectedGameMode.name}
-            </span>
-            <div style={{ fontSize: '12px', color: '#ccc', marginTop: '2px' }}>
-              {selectedGameMode.subtitle} • {selectedGameMode.players}
-            </div>
-          </div>
-        )}
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb steps={breadcrumbSteps} currentStep={currentStep} />
 
-        {/* Team Display (for Team Deathmatch) */}
-        {selectedTeam && (
-          <div style={{
-            background: `linear-gradient(135deg, ${selectedTeam.color}20, ${selectedTeam.color}40)`,
-            border: `2px solid ${selectedTeam.color}`,
-            borderRadius: '10px',
-            padding: '10px 20px',
-            margin: '10px 0',
-            display: 'inline-block'
-          }}>
-            <span style={{ fontSize: '20px', marginRight: '8px' }}>{selectedTeam.icon}</span>
-            <span style={{ color: selectedTeam.color, fontWeight: 'bold', fontSize: '18px' }}>
-              {selectedTeam.name}
-            </span>
-            <div style={{ fontSize: '12px', color: '#ccc', marginTop: '2px' }}>
-              "{selectedTeam.motto}"
-            </div>
-          </div>
-        )}
-        
-        <h2 style={{
-          fontSize: '16px',
-          margin: '10px 0 0 0',
-          color: '#e0e0e0'
-        }}>
-          Choose Your Combat Class
-        </h2>
-      </div>
+      {/* Header */}
+      <Header 
+        title="🐹 HAMSTER WARFARE 🔫"
+        subtitle="Choose Your Combat Class"
+        style={{ marginBottom: SPACING.base }}
+      />
+
+      {/* Audio Status Notification */}
+      <Notification 
+        message="🔊 Click anywhere to enable audio!"
+        type="warning"
+        show={!audioStarted}
+      />
+
+      {/* Selected Game Mode Display */}
+      {selectedGameMode && (
+        <SelectionDisplay item={selectedGameMode} type="gameMode" />
+      )}
+
+      {/* Selected Team Display */}
+      {selectedTeam && (
+        <SelectionDisplay item={selectedTeam} type="team" />
+      )}
 
       {/* Class Selection Grid */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '12px',
-        maxWidth: '800px',
-        marginBottom: '15px',
+        gap: SPACING.lg,
+        maxWidth: '1000px',
+        marginBottom: SPACING.lg,
         width: '100%',
-        padding: '0 15px'
+        padding: `0 ${SPACING.base}`
       }}>
         {Object.entries(HAMSTER_CLASSES).map(([className, classData]) => (
-          <div
+          <Card
             key={className}
+            selected={selectedClass === className}
+            hovered={hoveredClass === className}
             onClick={() => handleClassSelect(className)}
             onMouseEnter={() => setHoveredClass(className)}
             onMouseLeave={() => setHoveredClass(null)}
+            backgroundColor={`linear-gradient(135deg, ${classData.color}20, ${classData.color}40)`}
+            borderColor={selectedClass === className ? classData.color : `${classData.color}80`}
             style={{
-              background: `linear-gradient(135deg, ${classData.color}20, ${classData.color}40)`,
-              border: selectedClass === className ? `3px solid ${classData.color}` : `2px solid ${classData.color}80`,
-              borderRadius: '10px',
-              padding: '15px',
+              minWidth: '320px',
+              textAlign: 'center',
               cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              transform: hoveredClass === className ? 'scale(1.02)' : 'scale(1)',
+              borderWidth: selectedClass === className ? '3px' : '2px',
               boxShadow: selectedClass === className 
-                ? `0 6px 20px ${classData.color}50`
-                : '0 3px 10px rgba(0,0,0,0.3)',
-              minWidth: '250px',
-              textAlign: 'center'
+                ? `0 8px 25px ${classData.color}50, ${SHADOWS.xl}`
+                : SHADOWS.lg
             }}
           >
             {/* Class Icon */}
             <div style={{
-              fontSize: '36px',
-              marginBottom: '8px'
+              fontSize: TYPOGRAPHY.fontSize['4xl'],
+              marginBottom: SPACING.base
             }}>
               {classData.icon}
             </div>
 
             {/* Class Name */}
             <h3 style={{
-              fontSize: '18px',
-              margin: '0 0 6px 0',
+              fontSize: TYPOGRAPHY.fontSize.xl,
+              margin: `0 0 ${SPACING.sm} 0`,
               color: classData.color,
-              fontWeight: 'bold'
+              fontWeight: TYPOGRAPHY.fontWeight.bold,
+              fontFamily: TYPOGRAPHY.fontFamily.primary
             }}>
               {classData.name}
             </h3>
 
             {/* Description */}
             <p style={{
-              fontSize: '12px',
-              margin: '0 0 8px 0',
-              color: '#e0e0e0',
-              lineHeight: '1.2'
+              fontSize: TYPOGRAPHY.fontSize.sm,
+              margin: `0 0 ${SPACING.base} 0`,
+              color: COLORS.text.secondary,
+              lineHeight: '1.4'
             }}>
               {classData.description}
             </p>
 
-            {/* Weapons */}
+            {/* Character Stats */}
             <div style={{
-              marginBottom: '8px'
+              background: COLORS.background.blur,
+              borderRadius: RADIUS.base,
+              padding: SPACING.sm,
+              marginBottom: SPACING.base
             }}>
               <div style={{
-                fontSize: '12px',
-                color: '#ccc',
-                marginBottom: '8px'
+                color: classData.color,
+                fontSize: TYPOGRAPHY.fontSize.xs,
+                fontWeight: TYPOGRAPHY.fontWeight.bold,
+                marginBottom: SPACING.xs,
+                textTransform: 'uppercase'
               }}>
-                PRIMARY: {classData.primaryWeapon.toUpperCase()}
+                🐹 Character Stats
               </div>
               <div style={{
-                fontSize: '12px',
-                color: '#ccc'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: SPACING.xs,
+                fontSize: TYPOGRAPHY.fontSize.xs
               }}>
-                SECONDARY: {classData.secondaryWeapon.toUpperCase()}
+                <div style={{ color: COLORS.text.muted }}>
+                  <span style={{ color: COLORS.accent }}>❤️</span> Health: {classData.stats.health}
+                </div>
+                <div style={{ color: COLORS.text.muted }}>
+                  <span style={{ color: COLORS.accent }}>⚡</span> Speed: {classData.stats.speed}
+                </div>
+                <div style={{ color: COLORS.text.muted }}>
+                  <span style={{ color: COLORS.accent }}>💥</span> Damage: {classData.stats.damage}
+                </div>
+                <div style={{ color: COLORS.text.muted }}>
+                  <span style={{ color: COLORS.accent }}>🎯</span> Accuracy: {classData.stats.accuracy}
+                </div>
+              </div>
+            </div>
+
+            {/* Weapons */}
+            <div style={{
+              marginBottom: SPACING.base
+            }}>
+              <div style={{
+                fontSize: TYPOGRAPHY.fontSize.sm,
+                color: COLORS.text.muted,
+                marginBottom: SPACING.sm,
+                fontWeight: TYPOGRAPHY.fontWeight.bold
+              }}>
+                🔫 PRIMARY: {classData.primaryWeapon.toUpperCase()}
+              </div>
+              <div style={{
+                fontSize: TYPOGRAPHY.fontSize.sm,
+                color: COLORS.text.muted,
+                fontWeight: TYPOGRAPHY.fontWeight.bold
+              }}>
+                🔫 SECONDARY: {classData.secondaryWeapon.toUpperCase()}
               </div>
             </div>
 
@@ -281,18 +312,20 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
             <div style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '5px'
+              gap: SPACING.xs,
+              marginBottom: SPACING.base
             }}>
               {classData.specialties.map((specialty, index) => (
                 <div
                   key={index}
                   style={{
-                    background: `${classData.color}30`,
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    fontSize: '11px',
+                    background: `${classData.color}40`,
+                    padding: `${SPACING.xs} ${SPACING.sm}`,
+                    borderRadius: RADIUS.full,
+                    fontSize: TYPOGRAPHY.fontSize.xs,
                     color: classData.color,
-                    fontWeight: 'bold'
+                    fontWeight: TYPOGRAPHY.fontWeight.bold,
+                    border: `1px solid ${classData.color}60`
                   }}
                 >
                   ✦ {specialty}
@@ -303,101 +336,112 @@ export function LoadoutScreen({ onClassSelect, onBack, selectedGameMode, selecte
             {/* Selected indicator */}
             {selectedClass === className && (
               <div style={{
-                marginTop: '15px',
-                padding: '8px',
-                background: `${classData.color}`,
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                color: '#000'
+                marginTop: SPACING.base,
+                padding: SPACING.sm,
+                background: classData.color,
+                borderRadius: RADIUS.base,
+                fontSize: TYPOGRAPHY.fontSize.base,
+                fontWeight: TYPOGRAPHY.fontWeight.bold,
+                color: COLORS.text.dark,
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                boxShadow: SHADOWS.base
               }}>
                 ✅ SELECTED
               </div>
             )}
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Action Buttons */}
       <div style={{
         display: 'flex',
-        gap: '15px',
+        gap: SPACING.lg,
         alignItems: 'center',
-        marginTop: '10px'
+        marginTop: SPACING.xl,
+        marginBottom: SPACING.xl
       }}>
-        <button
+        <Button
           onClick={onBack}
-          style={{
-            padding: '15px 30px',
-            fontSize: '18px',
-            backgroundColor: '#666',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
+          variant="back"
+          icon="⬅️"
+          size="lg"
         >
-          ⬅️ BACK
-        </button>
+          BACK
+        </Button>
 
-        <button
+        <Button
           onClick={handleConfirm}
           disabled={!selectedClass}
-          style={{
-            padding: '15px 30px',
-            fontSize: '18px',
-            backgroundColor: selectedClass ? '#4CAF50' : '#333',
-            color: selectedClass ? 'white' : '#666',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: selectedClass ? 'pointer' : 'not-allowed',
-            fontWeight: 'bold',
-            transition: 'all 0.3s ease'
-          }}
+          variant={selectedClass ? "success" : "disabled"}
+          icon="🚀"
+          size="lg"
         >
-          🚀 {selectedTeam ? `DEPLOY ${selectedTeam.name.toUpperCase()}` : selectedGameMode ? `DEPLOY TO ${selectedGameMode.name.toUpperCase()}` : 'DEPLOY TO NUKETOWN'}
-        </button>
+          {selectedTeam 
+            ? `DEPLOY ${selectedTeam.name.toUpperCase()}` 
+            : selectedGameMode 
+              ? `DEPLOY TO ${selectedGameMode.name.toUpperCase()}` 
+              : 'DEPLOY TO NUKETOWN'}
+        </Button>
       </div>
 
-      {/* Selected Class Info */}
+      {/* Selected Class Detailed Info */}
       {selectedClass && (
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '20px',
-          background: 'rgba(0,0,0,0.8)',
-          padding: '15px',
-          borderRadius: '10px',
-          maxWidth: '300px'
+        <Card style={{
+          position: 'fixed',
+          bottom: SPACING.lg,
+          left: SPACING.lg,
+          maxWidth: '400px',
+          backgroundColor: COLORS.background.overlay,
+          borderColor: HAMSTER_CLASSES[selectedClass].color,
+          borderWidth: '2px'
         }}>
           <h4 style={{ 
-            margin: '0 0 10px 0', 
-            color: HAMSTER_CLASSES[selectedClass].color 
+            margin: `0 0 ${SPACING.base} 0`, 
+            color: HAMSTER_CLASSES[selectedClass].color,
+            fontSize: TYPOGRAPHY.fontSize.xl,
+            fontWeight: TYPOGRAPHY.fontWeight.bold,
+            fontFamily: TYPOGRAPHY.fontFamily.primary,
+            textTransform: 'uppercase'
           }}>
             {selectedClass} LOADOUT
           </h4>
+          
           {selectedTeam && (
             <div style={{
               color: selectedTeam.color,
-              fontSize: '14px',
-              fontWeight: 'bold',
-              marginBottom: '8px',
-              padding: '4px 8px',
+              fontSize: TYPOGRAPHY.fontSize.base,
+              fontWeight: TYPOGRAPHY.fontWeight.bold,
+              marginBottom: SPACING.base,
+              padding: SPACING.sm,
               background: `${selectedTeam.color}20`,
-              borderRadius: '5px',
-              border: `1px solid ${selectedTeam.color}30`
+              borderRadius: RADIUS.base,
+              border: `1px solid ${selectedTeam.color}40`
             }}>
               {selectedTeam.icon} {selectedTeam.name} Warrior
             </div>
           )}
-          <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
+
+          {/* Weapon Stats for Selected Class */}
+          <div style={{ marginBottom: SPACING.base }}>
+            <WeaponStats 
+              weaponName={HAMSTER_CLASSES[selectedClass].primaryWeapon}
+              stats={HAMSTER_CLASSES[selectedClass].weaponStats[HAMSTER_CLASSES[selectedClass].primaryWeapon]}
+            />
+          </div>
+
+          <div style={{ 
+            fontSize: TYPOGRAPHY.fontSize.sm, 
+            lineHeight: '1.5',
+            color: COLORS.text.secondary
+          }}>
             {selectedTeam 
-              ? `Ready to fight for ${selectedTeam.name} with ${HAMSTER_CLASSES[selectedClass].specialties.join(' and ').toLowerCase()}. Armed with ${HAMSTER_CLASSES[selectedClass].primaryWeapon} and ${HAMSTER_CLASSES[selectedClass].secondaryWeapon} for team victory!`
-              : `Ready to dominate Nuketown with ${HAMSTER_CLASSES[selectedClass].specialties.join(' and ').toLowerCase()}. Armed with ${HAMSTER_CLASSES[selectedClass].primaryWeapon} and ${HAMSTER_CLASSES[selectedClass].secondaryWeapon} for maximum hamster warfare efficiency.`
+              ? `Ready to fight for ${selectedTeam.name} with ${HAMSTER_CLASSES[selectedClass].specialties.join(' and ').toLowerCase()}. Armed with ${HAMSTER_CLASSES[selectedClass].primaryWeapon.toUpperCase()} and ${HAMSTER_CLASSES[selectedClass].secondaryWeapon.toUpperCase()} for team victory!`
+              : `Ready to dominate Nuketown with ${HAMSTER_CLASSES[selectedClass].specialties.join(' and ').toLowerCase()}. Armed with ${HAMSTER_CLASSES[selectedClass].primaryWeapon.toUpperCase()} and ${HAMSTER_CLASSES[selectedClass].secondaryWeapon.toUpperCase()} for maximum hamster warfare efficiency.`
             }
           </div>
-        </div>
+        </Card>
       )}
       </div>
     </div>

@@ -3,11 +3,17 @@ import React, { useState } from 'react';
 import { GameEngine } from './GameEngine.jsx';
 import { LoadoutScreen } from './ui/LoadoutScreen.jsx';
 import { LobbyScreen } from './ui/LobbyScreen.jsx';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, mergeStyles } from './ui/DesignSystem.js';
+import { Breadcrumb, Button, Card, Header, SelectionDisplay } from './ui/components/UIComponents.jsx';
 
 // Team Selection Component for Team Deathmatch
 function TeamSelectionScreen({ onTeamSelect, onBack, selectedGameMode }) {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [hoveredTeam, setHoveredTeam] = useState(null);
+
+  // Breadcrumb steps
+  const breadcrumbSteps = ['Game Mode', 'Team Selection', 'Class Selection', 'Deploy'];
+  const currentStep = 1;
 
   const teams = [
     {
@@ -47,115 +53,125 @@ function TeamSelectionScreen({ onTeamSelect, onBack, selectedGameMode }) {
       top: 0,
       left: 0,
       width: '100%',
-      height: '100%',
-      background: 'linear-gradient(135deg, #2c3e50 0%, #3498db 50%, #9b59b6 100%)',
+      height: '100vh',
+      background: COLORS.background.secondary,
+      color: COLORS.text.primary,
+      fontFamily: TYPOGRAPHY.fontFamily.primary,
+      zIndex: 1000,
+      overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
-      zIndex: 1000
+      justifyContent: 'flex-start',
+      padding: SPACING.base,
+      boxSizing: 'border-box'
     }}>
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb steps={breadcrumbSteps} currentStep={currentStep} />
+
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <h1 style={{
-          fontSize: '48px',
-          margin: '0 0 15px 0',
-          textShadow: '3px 3px 6px rgba(0,0,0,0.8)',
-          background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
-        }}>
-          ⚔️ CHOOSE YOUR SQUAD
-        </h1>
-        {selectedGameMode && (
-          <div style={{
-            background: `linear-gradient(135deg, ${selectedGameMode.color}20, ${selectedGameMode.color}40)`,
-            border: `2px solid ${selectedGameMode.color}`,
-            borderRadius: '10px',
-            padding: '10px 20px',
-            margin: '10px 0',
-            display: 'inline-block'
-          }}>
-            <span style={{ fontSize: '24px', marginRight: '10px' }}>{selectedGameMode.icon}</span>
-            <span style={{ color: selectedGameMode.color, fontWeight: 'bold', fontSize: '20px' }}>
-              {selectedGameMode.name}
-            </span>
-          </div>
-        )}
-        <p style={{ fontSize: '18px', margin: '10px 0 0 0', color: '#e0e0e0' }}>
-          Pick your team for epic hamster warfare!
-        </p>
-      </div>
+      <Header 
+        title="⚔️ CHOOSE YOUR SQUAD"
+        subtitle="Pick your team for epic hamster warfare!"
+        style={{ marginBottom: SPACING.xl }}
+      />
+
+      {/* Selected Game Mode Display */}
+      {selectedGameMode && (
+        <SelectionDisplay item={selectedGameMode} type="gameMode" />
+      )}
 
       {/* Team Selection Grid */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '40px',
-        maxWidth: '900px',
-        marginBottom: '40px',
+        gap: SPACING['2xl'],
+        maxWidth: '1000px',
+        marginBottom: SPACING['2xl'],
         width: '100%',
-        padding: '0 30px'
+        padding: `0 ${SPACING.xl}`
       }}>
         {teams.map((team) => (
-          <div
+          <Card
             key={team.id}
+            selected={selectedTeam === team.id}
+            hovered={hoveredTeam === team.id}
             onClick={() => handleTeamSelect(team.id)}
             onMouseEnter={() => setHoveredTeam(team.id)}
             onMouseLeave={() => setHoveredTeam(null)}
+            backgroundColor={`linear-gradient(135deg, ${team.color}20, ${team.color}40)`}
+            borderColor={selectedTeam === team.id ? team.color : `${team.color}80`}
             style={{
-              background: `linear-gradient(135deg, ${team.color}20, ${team.color}40)`,
-              border: selectedTeam === team.id ? `4px solid ${team.color}` : `3px solid ${team.color}80`,
-              borderRadius: '15px',
-              padding: '30px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              transform: hoveredTeam === team.id || selectedTeam === team.id ? 'scale(1.05)' : 'scale(1)',
-              boxShadow: selectedTeam === team.id 
-                ? `0 10px 30px ${team.color}50`
-                : hoveredTeam === team.id 
-                ? `0 8px 25px ${team.color}30`
-                : '0 5px 15px rgba(0,0,0,0.3)',
+              minHeight: '400px',
               textAlign: 'center',
-              minHeight: '300px',
+              cursor: 'pointer',
+              borderWidth: selectedTeam === team.id ? '4px' : '3px',
+              boxShadow: selectedTeam === team.id 
+                ? `0 12px 35px ${team.color}50, ${SHADOWS.xl}`
+                : hoveredTeam === team.id 
+                ? `0 10px 30px ${team.color}30, ${SHADOWS.lg}`
+                : SHADOWS.base,
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between'
             }}
           >
-            <div style={{ fontSize: '64px', marginBottom: '15px' }}>{team.icon}</div>
-            <h2 style={{ fontSize: '28px', margin: '0 0 10px 0', color: team.color, fontWeight: 'bold' }}>
+            <div style={{ 
+              fontSize: TYPOGRAPHY.fontSize['5xl'], 
+              marginBottom: SPACING.lg 
+            }}>
+              {team.icon}
+            </div>
+            
+            <h2 style={{ 
+              fontSize: TYPOGRAPHY.fontSize['3xl'], 
+              margin: `0 0 ${SPACING.base} 0`, 
+              color: team.color, 
+              fontWeight: TYPOGRAPHY.fontWeight.bold,
+              fontFamily: TYPOGRAPHY.fontFamily.primary
+            }}>
               {team.name}
             </h2>
-            <p style={{ fontSize: '14px', margin: '0 0 15px 0', color: '#e0e0e0', lineHeight: '1.4' }}>
+            
+            <p style={{ 
+              fontSize: TYPOGRAPHY.fontSize.base, 
+              margin: `0 0 ${SPACING.lg} 0`, 
+              color: COLORS.text.secondary, 
+              lineHeight: '1.5' 
+            }}>
               {team.description}
             </p>
+            
             <div style={{
-              background: `${team.color}30`,
-              padding: '10px',
-              borderRadius: '8px',
-              margin: '10px 0',
-              fontSize: '16px',
+              background: `${team.color}40`,
+              padding: SPACING.base,
+              borderRadius: RADIUS.lg,
+              margin: `${SPACING.base} 0`,
+              fontSize: TYPOGRAPHY.fontSize.lg,
               fontStyle: 'italic',
               color: team.color,
-              fontWeight: 'bold'
+              fontWeight: TYPOGRAPHY.fontWeight.bold,
+              border: `2px solid ${team.color}60`
             }}>
               "{team.motto}"
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '15px' }}>
+            
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: SPACING.sm, 
+              marginTop: SPACING.lg 
+            }}>
               {team.specialties.map((specialty, index) => (
                 <div
                   key={index}
                   style={{
-                    background: `${team.color}25`,
-                    padding: '6px 12px',
-                    borderRadius: '15px',
-                    fontSize: '12px',
+                    background: `${team.color}30`,
+                    padding: `${SPACING.sm} ${SPACING.base}`,
+                    borderRadius: RADIUS.full,
+                    fontSize: TYPOGRAPHY.fontSize.sm,
                     color: team.color,
-                    fontWeight: 'bold',
+                    fontWeight: TYPOGRAPHY.fontWeight.bold,
                     border: `1px solid ${team.color}50`
                   }}
                 >
@@ -163,60 +179,46 @@ function TeamSelectionScreen({ onTeamSelect, onBack, selectedGameMode }) {
                 </div>
               ))}
             </div>
+            
             {selectedTeam === team.id && (
               <div style={{
-                marginTop: '20px',
-                padding: '12px',
+                marginTop: SPACING.xl,
+                padding: SPACING.base,
                 background: team.color,
-                borderRadius: '10px',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: '#000',
-                boxShadow: `0 4px 15px ${team.color}60`
+                borderRadius: RADIUS.lg,
+                fontSize: TYPOGRAPHY.fontSize.lg,
+                fontWeight: TYPOGRAPHY.fontWeight.bold,
+                color: COLORS.text.dark,
+                boxShadow: SHADOWS.lg,
+                textTransform: 'uppercase'
               }}>
                 ✅ TEAM SELECTED
               </div>
             )}
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '25px', alignItems: 'center' }}>
-        <button
+      <div style={{ display: 'flex', gap: SPACING.xl, alignItems: 'center' }}>
+        <Button
           onClick={onBack}
-          style={{
-            padding: '18px 35px',
-            fontSize: '18px',
-            backgroundColor: '#666',
-            color: 'white',
-            border: 'none',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            transition: 'all 0.3s ease'
-          }}
+          variant="back"
+          icon="⬅️"
+          size="lg"
         >
-          ⬅️ BACK TO GAME MODES
-        </button>
-        <button
+          BACK TO GAME MODES
+        </Button>
+        
+        <Button
           onClick={handleConfirm}
           disabled={!selectedTeam}
-          style={{
-            padding: '18px 35px',
-            fontSize: '18px',
-            backgroundColor: selectedTeam ? '#4CAF50' : '#333',
-            color: selectedTeam ? 'white' : '#666',
-            border: 'none',
-            borderRadius: '10px',
-            cursor: selectedTeam ? 'pointer' : 'not-allowed',
-            fontWeight: 'bold',
-            transition: 'all 0.3s ease',
-            boxShadow: selectedTeam ? '0 4px 15px rgba(76, 175, 80, 0.4)' : 'none'
-          }}
+          variant={selectedTeam ? "success" : "disabled"}
+          icon="🚀"
+          size="lg"
         >
-          🚀 JOIN TEAM & SELECT LOADOUT
-        </button>
+          JOIN TEAM & SELECT LOADOUT
+        </Button>
       </div>
     </div>
   );
