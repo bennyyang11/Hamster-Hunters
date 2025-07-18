@@ -11,6 +11,9 @@ export class BulletSystem {
     this.bulletSpeed = 10000; // Ultra-fast bullets for competitive gameplay (5x faster)
     this.bulletLifetime = 10.0; // Bullets can travel much farther (10 seconds)
     
+    // Player collision tracking for multiplayer
+    this.otherPlayers = new Map(); // Will store other player positions and hitboxes
+    
     console.log('🔫 Bullet system initialized');
     this.loadBulletModel();
   }
@@ -144,6 +147,13 @@ export class BulletSystem {
       // Update age
       bullet.age += deltaTime;
       
+      // Check for collisions with other players FIRST (highest priority)
+      if (this.checkPlayerCollisions(bullet)) {
+        console.log('🎯 💥 BULLET HIT PLAYER! Removing bullet.');
+        this.removeBullet(i);
+        continue;
+      }
+      
       // Check for collisions with map/environment
       if (this.checkBulletCollision(bullet)) {
         this.createBulletImpact(bullet);
@@ -251,5 +261,93 @@ export class BulletSystem {
       this.removeBullet(i);
     }
     console.log('🧹 All bullets cleared');
+  }
+
+  // Register other players for collision detection
+  setOtherPlayers(otherPlayersMap) {
+    this.otherPlayers = otherPlayersMap;
+  }
+
+  // Add a single other player for collision detection
+  addOtherPlayer(playerId, playerData) {
+    this.otherPlayers.set(playerId, playerData);
+  }
+
+  // Remove a player from collision detection
+  removeOtherPlayer(playerId) {
+    this.otherPlayers.delete(playerId);
+  }
+
+  // Check if bullet hits any other players
+  checkPlayerCollisions(bullet) {
+    if (!this.otherPlayers || this.otherPlayers.size === 0) {
+      return false;
+    }
+
+    const bulletPos = bullet.mesh.position;
+    const bulletRadius = 5; // Bullet collision radius
+
+    for (const [playerId, playerData] of this.otherPlayers) {
+      if (!playerData || !playerData.position || !playerData.mesh) {
+        continue;
+      }
+
+      const playerPos = playerData.position;
+      
+      // Calculate distance to player
+      const distance = bulletPos.distanceTo(playerPos);
+      
+      // Large hamster hitbox (scaled to match the 75x scale)
+      const playerHitboxRadius = 60; // Adjusted for large hamster size
+      
+      if (distance <= (bulletRadius + playerHitboxRadius)) {
+        console.log(`🎯 BULLET HIT PLAYER! Distance: ${distance.toFixed(1)}, Player: ${playerId}`);
+        console.log(`🔍 Bullet: (${bulletPos.x.toFixed(1)}, ${bulletPos.y.toFixed(1)}, ${bulletPos.z.toFixed(1)})`);
+        console.log(`🐹 Player: (${playerPos.x.toFixed(1)}, ${playerPos.y.toFixed(1)}, ${playerPos.z.toFixed(1)})`);
+        
+        // Create hit effect at collision point
+        this.createPlayerHitEffect(bulletPos, playerPos);
+        
+        return true; // Hit detected
+      }
+    }
+
+    return false; // No hit
+  }
+
+  // Create visual effect when bullet hits a player
+  createPlayerHitEffect(bulletPos, playerPos) {
+    // Create small explosion effect at hit point
+    const effectGeometry = new THREE.SphereGeometry(2, 8, 6);
+    const effectMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0xff4444, 
+      transparent: true, 
+      opacity: 0.8 
+    });
+    const effectMesh = new THREE.Mesh(effectGeometry, effectMaterial);
+    
+    // Position effect at collision point
+    effectMesh.position.lerpVectors(bulletPos, playerPos, 0.5);
+    this.scene.add(effectMesh);
+    
+    // Animate and remove effect
+    let scale = 1;
+    let opacity = 0.8;
+    const animate = () => {
+      scale += 0.2;
+      opacity -= 0.04;
+      
+      effectMesh.scale.setScalar(scale);
+      effectMaterial.opacity = opacity;
+      
+      if (opacity > 0) {
+        requestAnimationFrame(animate);
+      } else {
+        this.scene.remove(effectMesh);
+        effectGeometry.dispose();
+        effectMaterial.dispose();
+      }
+    };
+    animate();
   }
 } 

@@ -41,7 +41,7 @@ function getClassWeapons(selectedClass) {
 }
 
 // Game Scene Component
-function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTeam, onGameExit, isPaused, setIsPaused, mouseSensitivity, onUpdateWeaponStats, onUpdatePlayerPosition, gameStateRef }) {
+function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTeam, onGameExit, isPaused, setIsPaused, mouseSensitivity, onUpdateWeaponStats, onUpdatePlayerPosition, gameStateRef, setGameStats, setIsDead }) {
   const { scene, camera, gl } = useThree();
   const playerRef = useRef();
 
@@ -162,12 +162,12 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
               // Scale the hamster to LARGE size
               playerMesh.scale.set(75.0, 75.0, 75.0);
               
-                          // Keep natural hamster colors (no team coloring)
-            // All hamsters will look the same regardless of team
+              // Keep natural hamster colors (no team coloring)
+              // All hamsters will look the same regardless of team
               
-                        // Set initial hamster rotation based on player data
-          const initialRotation = playerData.rotation?.y || 0;
-          playerMesh.rotation.y = Math.PI + initialRotation; // Add π to account for hamster facing direction
+              // Set initial hamster rotation based on player data
+              const initialRotation = playerData.rotation?.y || 0;
+              playerMesh.rotation.y = Math.PI + initialRotation; // Add π to account for hamster facing direction
               
             } else {
               // Fallback: Create a geometric hamster
@@ -179,105 +179,106 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
               playerMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
             }
             
-                      // Position the mesh
-          console.log(`🔍 Positioning other player with data:`, playerData.position);
-          const xPos = playerData.position?.x || 0;
-          const yPos = playerData.position?.y || 40;
-          const zPos = playerData.position?.z || 0;
-          
-          playerMesh.position.set(xPos, yPos, zPos);
-          console.log(`📍 Set mesh position to: (${xPos}, ${yPos}, ${zPos})`);
+            // Position the player mesh
+            playerMesh.position.set(
+              playerData.position?.x || 0,
+              playerData.position?.y || 1,
+              playerData.position?.z || 0
+            );
             
-            playerMesh.castShadow = true;
-            playerMesh.receiveShadow = true;
+            // Add to scene
+            scene.add(playerMesh);
             
-                      // Add name label above player
-          const nameLabel = createPlayerNameLabel(playerData.character || playerData.id, playerData.team);
-          nameLabel.position.set(0, 100, 0); // Above the hamster
-          playerMesh.add(nameLabel);
-          
-          // Add weapon to other player
-          addWeaponToOtherPlayer(playerMesh, playerData, assetLoader);
-          
-          // Add to scene
-          scene.add(playerMesh);
-            
-            // Store player data
+            // Store player data with mesh and collision info
             const otherPlayerData = {
               id: playerData.id,
               mesh: playerMesh,
-              character: playerData.character,
-              team: playerData.team,
               position: new THREE.Vector3(
                 playerData.position?.x || 0,
-                playerData.position?.y || 40,
+                playerData.position?.y || 1,
                 playerData.position?.z || 0
               ),
-              rotation: { y: playerData.rotation?.y || 0 }
+              rotation: { y: playerData.rotation?.y || 0 },
+              team: playerData.team,
+              character: playerData.character
             };
             
             otherPlayers.set(playerData.id, otherPlayerData);
-            console.log(`👥 ✅ Created other player mesh: ${playerData.id} (${playerData.team})`);
-            console.log(`📍 Player positioned at: (${playerMesh.position.x}, ${playerMesh.position.y}, ${playerMesh.position.z})`);
-            console.log(`🎬 Added to scene. Scene children count: ${scene.children.length}`);
+            
+            // Update bullet system with new player list
+            if (gameStateRef.current.bulletSystem) {
+              gameStateRef.current.bulletSystem.setOtherPlayers(otherPlayers);
+              console.log(`🔫 Updated bullet system with ${otherPlayers.size} other players`);
+            }
+            
+            console.log(`✅ Created other player: ${playerData.id} at (${playerMesh.position.x.toFixed(1)}, ${playerMesh.position.y.toFixed(1)}, ${playerMesh.position.z.toFixed(1)})`);
+            
+            // Add weapon to other player if specified
+            addWeaponToOtherPlayer(otherPlayerData.mesh, playerData, assetLoader);
             
           } catch (error) {
-            console.error(`❌ Failed to create other player mesh:`, error);
+            console.error(`❌ Failed to create other player ${playerData.id}:`, error);
           }
         }
 
         function updateOtherPlayer(playerData, otherPlayers) {
           const otherPlayer = otherPlayers.get(playerData.id);
           if (otherPlayer) {
-            // Update position if provided
+            console.log(`👥 Updating other player: ${playerData.id}`);
+            
+            // Update stored data
+            if (playerData.character) otherPlayer.character = playerData.character;
+            if (playerData.team) otherPlayer.team = playerData.team;
             if (playerData.position) {
-              otherPlayer.position.copy(playerData.position);
+              otherPlayer.position.set(playerData.position.x, playerData.position.y, playerData.position.z);
               if (otherPlayer.mesh) {
-                otherPlayer.mesh.position.copy(playerData.position);
+                otherPlayer.mesh.position.copy(otherPlayer.position);
               }
             }
             
-            // Check if character class has changed
-            const oldCharacter = otherPlayer.character;
-            const newCharacter = playerData.character || otherPlayer.character;
-            
-            // Update other properties
-            otherPlayer.character = newCharacter;
-            otherPlayer.team = playerData.team || otherPlayer.team;
-            
-            // If character class changed, update weapon
-            if (oldCharacter !== newCharacter && otherPlayer.mesh) {
-              console.log(`🔫 Character class changed from "${oldCharacter}" to "${newCharacter}" - updating weapon`);
-              
-              // Remove old weapon(s) from mesh
-              const weaponsToRemove = [];
-              otherPlayer.mesh.traverse((child) => {
-                if (child.userData && child.userData.isWeapon) {
-                  weaponsToRemove.push(child);
-                }
-              });
-              weaponsToRemove.forEach(weapon => {
-                otherPlayer.mesh.remove(weapon);
-              });
-              
-              // Add new weapon based on updated character class
-              addWeaponToOtherPlayer(otherPlayer.mesh, { 
-                id: playerData.id, 
-                character: newCharacter,
-                class: playerData.class || newCharacter
-              }, assetLoader);
+            // Update bullet system with updated player data
+            if (gameStateRef.current.bulletSystem) {
+              gameStateRef.current.bulletSystem.setOtherPlayers(otherPlayers);
             }
-            
-            console.log(`👥 Updated other player: ${playerData.id}`);
+          } else {
+            console.log(`❌ Cannot update - other player not found: ${playerData.id}`);
           }
         }
 
         function removeOtherPlayer(playerId, scene, otherPlayers) {
           const otherPlayer = otherPlayers.get(playerId);
-          if (otherPlayer && otherPlayer.mesh) {
-            scene.remove(otherPlayer.mesh);
+          if (otherPlayer) {
+            console.log(`👥 Removing other player: ${playerId}`);
+            
+            // Remove mesh from scene
+            if (otherPlayer.mesh) {
+              scene.remove(otherPlayer.mesh);
+              
+              // Clean up geometry and materials
+              if (otherPlayer.mesh.geometry) {
+                otherPlayer.mesh.geometry.dispose();
+              }
+              if (otherPlayer.mesh.material) {
+                if (Array.isArray(otherPlayer.mesh.material)) {
+                  otherPlayer.mesh.material.forEach(material => material.dispose());
+                } else {
+                  otherPlayer.mesh.material.dispose();
+                }
+              }
+            }
+            
+            // Remove from players map
             otherPlayers.delete(playerId);
-            console.log(`👥 ❌ Removed other player: ${playerId}`);
+            
+            // Update bullet system
+            if (gameStateRef.current.bulletSystem) {
+              gameStateRef.current.bulletSystem.removeOtherPlayer(playerId);
+              console.log(`🔫 Removed player ${playerId} from bullet system`);
+            }
+            
+            console.log(`✅ Removed other player: ${playerId}`);
+          } else {
+            console.log(`❌ Cannot remove - other player not found: ${playerId}`);
           }
         }
 
@@ -470,6 +471,11 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
                 // Apply Y rotation (horizontal turning) to the hamster mesh
                 otherPlayer.mesh.rotation.y = Math.PI + rotation.y; // Add π to account for hamster facing direction
               }
+              
+              // Update bullet system with current player positions every few updates
+              if (Math.random() < 0.1 && gameStateRef.current.bulletSystem) { // 10% of movement updates
+                gameStateRef.current.bulletSystem.setOtherPlayers(otherPlayers);
+              }
             } else {
               console.log(`❌ No other player found with ID: ${moveData.id}`);
             }
@@ -516,6 +522,116 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           console.log(`🌐 ❌ Socket disconnected`);
         });
 
+        // Debug: Log all socket events
+        socket.onAny((eventName, ...args) => {
+          if (eventName !== 'playerMoved' && eventName !== 'playerMove') { // Skip spam events
+            console.log(`🔔 SOCKET EVENT: ${eventName}`, args);
+          }
+        });
+
+        // Handle other players shooting
+        socket.on('playerShot', (shotData) => {
+          console.log(`🔫 Other player ${shotData.id} fired ${shotData.weapon}`);
+          
+          // Create visual bullet for other player's shot
+          if (gameStateRef.current.bulletSystem) {
+            const bulletStartPos = new THREE.Vector3(shotData.position.x, shotData.position.y, shotData.position.z);
+            const bulletDirection = new THREE.Vector3(shotData.direction.x, shotData.direction.y, shotData.direction.z);
+            gameStateRef.current.bulletSystem.fireBullet(bulletStartPos, bulletDirection, shotData.weapon || 'rifle');
+          }
+        });
+
+        // Handle taking damage from other players
+        socket.on('takeDamage', (damageData) => {
+          console.log(`💥 ===== TAKING DAMAGE EVENT RECEIVED =====`);
+          console.log(`💥 Damage Data:`, damageData);
+          console.log(`💥 Taking ${damageData.damage} damage from ${damageData.shooterName} with ${damageData.weapon}`);
+          console.log(`💥 New Health: ${damageData.newHealth}`);
+          
+          // Update local health
+          const newHealth = Math.max(0, damageData.newHealth);
+          console.log(`💥 Calculated newHealth: ${newHealth}`);
+          
+          // Test if setGameStats is a function
+          console.log(`💥 setGameStats type:`, typeof setGameStats);
+          
+          setGameStats(prev => {
+            console.log(`💥 Previous gameStats:`, prev);
+            const newStats = {
+              ...prev,
+              health: newHealth
+            };
+            console.log(`💥 New gameStats:`, newStats);
+            return newStats;
+          });
+          
+          // Update player health if available
+          if (gameStateRef.current.player) {
+            console.log(`💥 Updating player health from ${gameStateRef.current.player.health} to ${newHealth}`);
+            gameStateRef.current.player.health = newHealth;
+          }
+          
+          // Check if player died
+          if (newHealth <= 0) {
+            console.log(`💥 Player died! Setting isDead to true`);
+            console.log(`💥 setIsDead type:`, typeof setIsDead);
+            setIsDead(true);
+            console.log('💀 Player died - showing death screen');
+          }
+          
+          // Create damage effect
+          createDamageEffect(damageData.damage, damageData.isHeadshot);
+          
+          console.log(`❤️ Health updated: ${newHealth}/100`);
+          console.log(`💥 ===== END TAKING DAMAGE EVENT =====`);
+        });
+
+        // Handle hit confirmations (when you hit someone else)
+        socket.on('hitConfirm', (hitData) => {
+          console.log(`🎯 Hit confirmed! Dealt ${hitData.damage} damage to target`);
+          
+          // Create hit marker effect
+          createHitMarker(hitData.damage, hitData.isHeadshot);
+        });
+
+        // Handle respawn
+        socket.on('respawn', (respawnData) => {
+          console.log(`♻️ Respawning at position:`, respawnData.position);
+          
+          // Reset health and death state
+          setGameStats(prev => ({
+            ...prev,
+            health: respawnData.health
+          }));
+          setIsDead(false);
+          
+          // Update player position and health
+          if (gameStateRef.current.player && respawnData.position) {
+            gameStateRef.current.player.position.set(respawnData.position.x, respawnData.position.y, respawnData.position.z);
+            gameStateRef.current.player.health = respawnData.health;
+            gameStateRef.current.player.isAlive = true;
+            
+            // Update camera
+            if (gameStateRef.current.player.setupCamera) {
+              gameStateRef.current.player.setupCamera();
+            }
+          }
+        });
+
+        // Handle player health updates (for other players)
+        socket.on('playerHealthUpdate', (healthData) => {
+          // This could be used to show health bars above other players in the future
+          console.log(`👥 Player ${healthData.playerId} health: ${healthData.health}/${healthData.maxHealth}`);
+        });
+
+        // Handle player kills notifications
+        socket.on('playerKilled', (killData) => {
+          console.log(`💀 ${killData.killerName} eliminated ${killData.victimName} with ${killData.weapon}`);
+          
+          // Show kill notification in UI
+          showKillNotification(killData);
+        });
+
         // Send heartbeat every 10 seconds to keep connection active
         setInterval(() => {
           if (socket.connected) {
@@ -544,8 +660,13 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         
         console.log('🌐 Socket connection established and player join data sent');
         
+        // Initialize bullet system with other players map for collision detection
+        if (gameStateRef.current.bulletSystem) {
+          gameStateRef.current.bulletSystem.setOtherPlayers(otherPlayers);
+          console.log('🔫 Bullet system initialized with multiplayer collision detection');
+        }
+        
         // TEMPORARY: Force player to correct spawn position for testing
-        // This ensures bullets come from the right place even if socket sync fails
         setTimeout(() => {
           if (selectedGameMode && selectedGameMode.id === 'hamster-havoc' && selectedTeam) {
             let spawnPos;
@@ -1148,6 +1269,7 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
   const [soundVolume, setSoundVolume] = useState(0.3);
   const [musicVolume, setMusicVolume] = useState(0.2);
   const [playerPosition, setPlayerPosition] = useState(null);
+  const [isDead, setIsDead] = useState(false);
 
   // Stop lobby music when game starts and sync volume controls
   useEffect(() => {
@@ -1193,6 +1315,45 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
 
   const handleExitToMenu = () => {
     onGameExit();
+  };
+
+  // Manual respawn function
+  const handleManualRespawn = () => {
+    // Send respawn request to server
+    if (gameStateRef.current.player?.socket) {
+      gameStateRef.current.player.socket.emit('requestRespawn');
+      console.log('🔄 Respawn request sent to server');
+    } else {
+      console.warn('⚠️ Cannot respawn - no socket connection');
+      
+      // Fallback: local respawn if no socket
+      setIsDead(false);
+      setGameStats(prev => ({
+        ...prev,
+        health: 100
+      }));
+      
+      if (gameStateRef.current.player) {
+        gameStateRef.current.player.health = 100;
+        gameStateRef.current.player.isAlive = true;
+        
+        // Move player to spawn position based on team
+        let spawnPos;
+        if (selectedTeam?.id === 'wheel-warriors') {
+          spawnPos = { x: -2105.83, y: 40.00, z: -3224.46 };
+        } else if (selectedTeam?.id === 'cheek-stuffers') {
+          spawnPos = { x: 319.04, y: 40.00, z: 3942.67 };
+        } else {
+          spawnPos = { x: 0, y: 40, z: 0 };
+        }
+        
+        gameStateRef.current.player.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+        
+        if (gameStateRef.current.player.setupCamera) {
+          gameStateRef.current.player.setupCamera();
+        }
+      }
+    }
   };
 
   const handleUpdateWeaponStats = (stats) => {
@@ -1255,17 +1416,120 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
           onUpdateWeaponStats={handleUpdateWeaponStats}
           onUpdatePlayerPosition={handleUpdatePlayerPosition}
           gameStateRef={gameStateRef}
+          setGameStats={setGameStats}
+          setIsDead={setIsDead}
         />
       </Canvas>
       
+      {/* Game HUD */}
       <GameHUD 
-        gameStats={gameStats} 
+        gameStats={gameStats}
         weaponStats={weaponStats}
         playerPosition={playerPosition}
-        onSettingsOpen={() => setShowSettings(true)} 
+        onSettingsOpen={() => setShowSettings(true)}
       />
-      
 
+      {/* Death Screen */}
+      {isDead && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+          fontFamily: 'Arial, sans-serif'
+        }}>
+          {/* Death Message */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '40px'
+          }}>
+            <div style={{
+              color: '#ff4444',
+              fontSize: '48px',
+              fontWeight: 'bold',
+              marginBottom: '20px',
+              textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+            }}>
+              💀 YOU DIED
+            </div>
+            <div style={{
+              color: '#ffffff',
+              fontSize: '20px',
+              marginBottom: '10px'
+            }}>
+              Your hamster has been eliminated!
+            </div>
+            <div style={{
+              color: '#cccccc',
+              fontSize: '16px'
+            }}>
+              Health: {gameStats.health}/100
+            </div>
+          </div>
+
+          {/* Respawn Button */}
+          <button
+            onClick={handleManualRespawn}
+            style={{
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              padding: '15px 30px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              marginBottom: '20px',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#45a049';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = '#4CAF50';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            🔄 RESPAWN
+          </button>
+
+          {/* Exit Button */}
+          <button
+            onClick={handleExitToMenu}
+            style={{
+              backgroundColor: '#f44336',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#da190b';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = '#f44336';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            🚪 EXIT TO MENU
+          </button>
+        </div>
+      )}
 
       {/* Pause Screen Overlay */}
       {isPaused && (
@@ -1300,7 +1564,7 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
                 Check for movement debug messages
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
               <button
                 onClick={handleResumeGame}
@@ -1317,7 +1581,7 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
               >
                 ▶️ RESUME
               </button>
-              
+
               <button
                 onClick={handleExitToMenu}
                 style={{
@@ -1338,7 +1602,7 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
         </div>
       )}
 
-      {/* Pause Menu Overlay */}
+      {/* Pause Menu */}
       {showPauseMenu && (
         <div style={{
           position: 'fixed',
@@ -1736,3 +2000,180 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
     </div>
   );
 } 
+
+// Helper functions for visual effects
+function createDamageEffect(damage, isHeadshot) {
+  // Create screen flash effect for taking damage
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.width = '100vw';
+  overlay.style.height = '100vh';
+  overlay.style.backgroundColor = isHeadshot ? 'rgba(255, 0, 0, 0.4)' : 'rgba(255, 0, 0, 0.2)';
+  overlay.style.pointerEvents = 'none';
+  overlay.style.zIndex = '9999';
+  overlay.style.transition = 'opacity 0.3s ease-out';
+  
+  document.body.appendChild(overlay);
+  
+  // Fade out and remove
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+    setTimeout(() => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    }, 300);
+  }, 100);
+  
+  // Create damage text
+  const damageText = document.createElement('div');
+  damageText.textContent = isHeadshot ? `${damage} HEADSHOT!` : `-${damage}`;
+  damageText.style.position = 'fixed';
+  damageText.style.top = '45%';
+  damageText.style.left = '50%';
+  damageText.style.transform = 'translate(-50%, -50%)';
+  damageText.style.color = isHeadshot ? '#ff0000' : '#ff6666';
+  damageText.style.fontSize = isHeadshot ? '32px' : '24px';
+  damageText.style.fontWeight = 'bold';
+  damageText.style.fontFamily = 'Arial, sans-serif';
+  damageText.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+  damageText.style.pointerEvents = 'none';
+  damageText.style.zIndex = '10000';
+  damageText.style.transition = 'all 1s ease-out';
+  
+  document.body.appendChild(damageText);
+  
+  // Animate and remove damage text
+  setTimeout(() => {
+    damageText.style.opacity = '0';
+    damageText.style.transform = 'translate(-50%, -70%)';
+    setTimeout(() => {
+      if (damageText.parentNode) {
+        damageText.parentNode.removeChild(damageText);
+      }
+    }, 1000);
+  }, 100);
+}
+
+function createHitMarker(damage, isHeadshot) {
+  // Create hit marker crosshair
+  const hitMarker = document.createElement('div');
+  hitMarker.style.position = 'fixed';
+  hitMarker.style.top = '50%';
+  hitMarker.style.left = '50%';
+  hitMarker.style.transform = 'translate(-50%, -50%)';
+  hitMarker.style.width = '20px';
+  hitMarker.style.height = '20px';
+  hitMarker.style.pointerEvents = 'none';
+  hitMarker.style.zIndex = '10000';
+  
+  // Create hit marker lines
+  const lines = ['top', 'right', 'bottom', 'left'];
+  lines.forEach((direction, index) => {
+    const line = document.createElement('div');
+    line.style.position = 'absolute';
+    line.style.backgroundColor = isHeadshot ? '#ff0000' : '#ffffff';
+    line.style.boxShadow = '0 0 4px rgba(0,0,0,0.8)';
+    
+    if (direction === 'top' || direction === 'bottom') {
+      line.style.width = '2px';
+      line.style.height = '8px';
+      line.style.left = '9px';
+      line.style.top = direction === 'top' ? '0px' : '12px';
+    } else {
+      line.style.width = '8px';
+      line.style.height = '2px';
+      line.style.top = '9px';
+      line.style.left = direction === 'left' ? '0px' : '12px';
+    }
+    
+    hitMarker.appendChild(line);
+  });
+  
+  document.body.appendChild(hitMarker);
+  
+  // Remove hit marker after animation
+  setTimeout(() => {
+    if (hitMarker.parentNode) {
+      hitMarker.parentNode.removeChild(hitMarker);
+    }
+  }, 200);
+  
+  // Create damage number for hit confirmation
+  const damageNumber = document.createElement('div');
+  damageNumber.textContent = isHeadshot ? `${damage} HS!` : `${damage}`;
+  damageNumber.style.position = 'fixed';
+  damageNumber.style.top = '55%';
+  damageNumber.style.left = '50%';
+  damageNumber.style.transform = 'translate(-50%, -50%)';
+  damageNumber.style.color = isHeadshot ? '#ff0000' : '#00ff00';
+  damageNumber.style.fontSize = isHeadshot ? '18px' : '16px';
+  damageNumber.style.fontWeight = 'bold';
+  damageNumber.style.fontFamily = 'Arial, sans-serif';
+  damageNumber.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+  damageNumber.style.pointerEvents = 'none';
+  damageNumber.style.zIndex = '10000';
+  damageNumber.style.transition = 'all 0.8s ease-out';
+  
+  document.body.appendChild(damageNumber);
+  
+  // Animate damage number
+  setTimeout(() => {
+    damageNumber.style.opacity = '0';
+    damageNumber.style.transform = 'translate(-50%, -70%)';
+    setTimeout(() => {
+      if (damageNumber.parentNode) {
+        damageNumber.parentNode.removeChild(damageNumber);
+      }
+    }, 800);
+  }, 50);
+}
+
+function showKillNotification(killData) {
+  // Create kill notification
+  const notification = document.createElement('div');
+  notification.style.position = 'fixed';
+  notification.style.top = '20px';
+  notification.style.right = '20px';
+  notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+  notification.style.color = '#fff';
+  notification.style.padding = '12px 20px';
+  notification.style.borderRadius = '8px';
+  notification.style.fontFamily = 'Arial, sans-serif';
+  notification.style.fontSize = '14px';
+  notification.style.fontWeight = 'bold';
+  notification.style.border = '2px solid #ff6666';
+  notification.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
+  notification.style.zIndex = '10000';
+  notification.style.transform = 'translateX(100%)';
+  notification.style.transition = 'transform 0.3s ease-out';
+  
+  const icon = killData.isHeadshot ? '🎯' : '💀';
+  notification.innerHTML = `
+    ${icon} <span style="color: #ff6666">${killData.killerName}</span> 
+    eliminated 
+    <span style="color: #66ccff">${killData.victimName}</span>
+    ${killData.isHeadshot ? '<span style="color: #ff0000">(HEADSHOT)</span>' : ''}
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Slide in
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 100);
+  
+  // Slide out and remove after 4 seconds
+  setTimeout(() => {
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 4000);
+}
+
+export default GameEngine;

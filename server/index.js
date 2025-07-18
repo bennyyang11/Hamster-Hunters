@@ -150,7 +150,7 @@ io.on('connection', (socket) => {
   socket.on('playerShoot', (data) => {
     const player = players.get(socket.id);
     if (player && player.isAlive) {
-      // Broadcast shooting event
+      // Broadcast shooting event to other players so they can see the bullet
       socket.broadcast.emit('playerShot', {
         id: socket.id,
         position: data.position,
@@ -159,7 +159,7 @@ io.on('connection', (socket) => {
         timestamp: data.timestamp
       });
 
-      // Check for hits (simplified hit detection)
+      // Check for hits using improved hit detection
       checkHit(socket.id, data);
     }
   });
@@ -170,6 +170,17 @@ io.on('connection', (socket) => {
     if (player && player.isAlive) {
       // Just acknowledge the reload - ammo is managed client-side
       socket.emit('reloadComplete');
+    }
+  });
+
+  // Handle manual respawn request
+  socket.on('requestRespawn', () => {
+    const player = players.get(socket.id);
+    if (player && !player.isAlive) {
+      respawnPlayer(socket.id);
+      console.log(`♻️ Manual respawn requested by ${player.character}`);
+    } else {
+      console.log(`⚠️ Respawn request ignored - player ${socket.id} is already alive`);
     }
   });
 
@@ -195,10 +206,8 @@ io.on('connection', (socket) => {
           victimName: targetPlayer.character
         });
         
-        // Respawn after delay
-        setTimeout(() => {
-          respawnPlayer(targetPlayer.id);
-        }, 3000);
+        // Don't auto-respawn - let player choose when to respawn
+        // Removed: setTimeout(() => { respawnPlayer(targetPlayer.id); }, 3000);
       }
       
       // Send health update
@@ -226,32 +235,122 @@ io.on('connection', (socket) => {
   });
 });
 
-// Helper function to check hits
+// Improved helper function to check hits using raycast-based detection
 function checkHit(shooterId, shotData) {
-  // Simple hit detection - in a real game, this would be more sophisticated
   const shooter = players.get(shooterId);
   if (!shooter) return;
 
+  const shotPosition = shotData.position;
+  const shotDirection = shotData.direction;
+  const maxRange = 5000; // Maximum bullet range
+
   players.forEach((player, id) => {
     if (id !== shooterId && player.isAlive) {
-      const distance = Math.sqrt(
-        Math.pow(player.position.x - shotData.position.x, 2) +
-        Math.pow(player.position.y - shotData.position.y, 2) +
-        Math.pow(player.position.z - shotData.position.z, 2)
+      const playerPosition = player.position;
+      
+      // Create a vector from shot origin to player
+      const toPlayer = {
+        x: playerPosition.x - shotPosition.x,
+        y: playerPosition.y - shotPosition.y,
+        z: playerPosition.z - shotPosition.z
+      };
+      
+      // Calculate distance to player
+      const distanceToPlayer = Math.sqrt(
+        toPlayer.x * toPlayer.x + 
+        toPlayer.y * toPlayer.y + 
+        toPlayer.z * toPlayer.z
       );
-
-      // Simple hit check - if player is close to shot line
-      if (distance < 2) {
-        const baseDamage = shotData.damage || 25;
+      
+      // Skip if player is too far away
+      if (distanceToPlayer > maxRange) return;
+      
+      // Project player position onto shot ray
+      const dotProduct = (
+        toPlayer.x * shotDirection.x + 
+        toPlayer.y * shotDirection.y + 
+        toPlayer.z * shotDirection.z
+      );
+      
+      // Skip if player is behind the shot origin
+      if (dotProduct < 0) return;
+      
+      // Calculate closest point on ray to player
+      const closestPointOnRay = {
+        x: shotPosition.x + shotDirection.x * dotProduct,
+        y: shotPosition.y + shotDirection.y * dotProduct,
+        z: shotPosition.z + shotDirection.z * dotProduct
+      };
+      
+      // Calculate distance from player to closest point on ray
+      const distanceToRay = Math.sqrt(
+        Math.pow(playerPosition.x - closestPointOnRay.x, 2) +
+        Math.pow(playerPosition.y - closestPointOnRay.y, 2) +
+        Math.pow(playerPosition.z - closestPointOnRay.z, 2)
+      );
+      
+      // Hit detection threshold (hamster hitbox size)
+      const hitThreshold = 40; // Large hamster size
+      
+      if (distanceToRay <= hitThreshold) {
+        // Calculate damage
+        const baseDamage = shotData.damage || 35;
         const damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4)); // ±20% variation
-        const isHeadshot = Math.random() > 0.9;
-        const finalDamage = isHeadshot ? damage * 2 : damage;
+        const isHeadshot = Math.random() > 0.85; // 15% headshot chance
+        const finalDamage = isHeadshot ? Math.floor(damage * 1.5) : damage;
         
+        // Apply damage to target player
+        const oldHealth = player.health;
+        player.health = Math.max(0, player.health - finalDamage);
+        
+        console.log(`🎯 HIT! ${shooter.character} hit ${player.character} for ${finalDamage} damage (${oldHealth} -> ${player.health})`);
+        
+        // Send hit confirmation to shooter
         io.to(shooterId).emit('hitConfirm', {
           targetId: id,
           damage: finalDamage,
           isHeadshot: isHeadshot,
-          weapon: shotData.weapon
+          weapon: shotData.weapon,
+          targetHealth: player.health
+        });
+        
+        // Send damage notification to target player
+        io.to(id).emit('takeDamage', {
+          damage: finalDamage,
+          shooterId: shooterId,
+          shooterName: shooter.character,
+          isHeadshot: isHeadshot,
+          weapon: shotData.weapon,
+          newHealth: player.health
+        });
+        
+        // Check if player was killed
+        if (player.health <= 0) {
+          player.isAlive = false;
+          player.deaths++;
+          shooter.kills++;
+          
+          // Notify about kill
+          io.emit('playerKilled', {
+            killer: shooterId,
+            victim: id,
+            killerName: shooter.character,
+            victimName: player.character,
+            weapon: shotData.weapon,
+            isHeadshot: isHeadshot
+          });
+          
+          console.log(`💀 KILL! ${shooter.character} eliminated ${player.character} with ${shotData.weapon}`);
+          
+          // Don't auto-respawn - let player choose when to respawn
+          // Removed: setTimeout(() => { respawnPlayer(id); }, 3000);
+        }
+        
+        // Send health update to all players (for spectators/UI)
+        io.emit('playerHealthUpdate', {
+          playerId: id,
+          health: player.health,
+          maxHealth: 100
         });
       }
     }
@@ -313,23 +412,33 @@ function getSpawnPosition(gameMode, team) {
   };
 }
 
-// Helper function to respawn player
+// Helper function to respawn a player
 function respawnPlayer(playerId) {
   const player = players.get(playerId);
   if (player) {
     player.health = 100;
     player.isAlive = true;
     
-    // Get appropriate spawn position based on game mode and team
-    player.position = getSpawnPosition(player.gameMode, player.team);
+    // Reset position to spawn point
+    const gameMode = player.gameMode || 'hamster-havoc';
+    const team = player.team || 'cheek-stuffers';
+    player.position = getSpawnPosition(gameMode, team);
     
-    console.log(`🐹 ${playerId} respawned at (${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)}) - ${player.gameMode} ${player.team || 'solo'}`);
-    
-    io.to(playerId).emit('respawn', player);
-    io.emit('playerRespawned', {
-      id: playerId,
-      position: player.position
+    // Notify player of respawn
+    io.to(playerId).emit('respawn', {
+      position: player.position,
+      health: player.health
     });
+    
+    // Notify all players of the respawn
+    io.emit('playerRespawned', {
+      playerId: playerId,
+      playerName: player.character,
+      position: player.position,
+      health: player.health
+    });
+    
+    console.log(`♻️ Respawned ${player.character} at (${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)})`);
   }
 }
 
