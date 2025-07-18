@@ -3,6 +3,8 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { sharedAudioManager, initializeAudio } from '../utils/SharedAudioManager.js';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from './DesignSystem.js';
+import { Breadcrumb, Button, Card, Header } from './components/UIComponents.jsx';
 
 // Preload the assets for better performance
 useGLTF.preload('/hamster.glb');
@@ -215,6 +217,13 @@ function BackgroundScene() {
 
 // GameMode Selection Component
 function GameModeSelection({ onGameModeSelect, onBack }) {
+  const [selectedGameMode, setSelectedGameMode] = useState(null);
+  const [hoveredGameMode, setHoveredGameMode] = useState(null);
+
+  // Breadcrumb steps
+  const breadcrumbSteps = ['Game Mode', 'Team Selection', 'Class Selection', 'Deploy'];
+  const currentStep = 0;
+
   const gameModes = [
     {
       id: 'hamster-havoc',
@@ -245,126 +254,176 @@ function GameModeSelection({ onGameModeSelect, onBack }) {
     }
   ];
 
+  const handleGameModeSelect = (gameModeId) => {
+    setSelectedGameMode(gameModeId);
+  };
+
+  const handleConfirm = () => {
+    if (selectedGameMode) {
+      const gameModeData = gameModes.find(mode => mode.id === selectedGameMode);
+      onGameModeSelect(gameModeData);
+    }
+  };
+
   return (
     <div style={{
       position: 'absolute',
       top: 0,
       left: 0,
       width: '100%',
-      height: '100%',
-      background: 'rgba(0,0,0,0.9)',
+      height: '100vh',
+      background: COLORS.background.secondary,
+      color: COLORS.text.primary,
+      fontFamily: TYPOGRAPHY.fontFamily.primary,
+      zIndex: 1000,
+      overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
-      zIndex: 1000
+      justifyContent: 'flex-start',
+      padding: SPACING.base,
+      boxSizing: 'border-box'
     }}>
-      <h1 style={{
-        fontSize: '48px',
-        margin: '0 0 20px 0',
-        textShadow: '3px 3px 6px rgba(0,0,0,0.8)',
-        color: '#00ff00'
-      }}>
-        🎮 SELECT GAME MODE
-      </h1>
-      
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb steps={breadcrumbSteps} currentStep={currentStep} />
+
+      {/* Header */}
+      <Header 
+        title="🎮 SELECT GAME MODE"
+        subtitle="Choose your battlefield for epic hamster warfare!"
+        style={{ marginBottom: SPACING.xl }}
+      />
+
+      {/* Game Mode Selection Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '30px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: SPACING['2xl'],
         maxWidth: '1200px',
-        margin: '20px',
-        width: '100%'
+        marginBottom: SPACING['2xl'],
+        width: '100%',
+        padding: `0 ${SPACING.xl}`
       }}>
         {gameModes.map((mode) => (
-          <div
+          <Card
             key={mode.id}
-            onClick={() => onGameModeSelect(mode)}
+            selected={selectedGameMode === mode.id}
+            hovered={hoveredGameMode === mode.id}
+            onClick={() => handleGameModeSelect(mode.id)}
+            onMouseEnter={() => setHoveredGameMode(mode.id)}
+            onMouseLeave={() => setHoveredGameMode(null)}
+            backgroundColor={`linear-gradient(135deg, ${mode.color}20, ${mode.color}40)`}
+            borderColor={selectedGameMode === mode.id ? mode.color : `${mode.color}80`}
             style={{
-              background: `linear-gradient(135deg, ${mode.color}20, ${mode.color}40)`,
-              border: `3px solid ${mode.color}`,
-              borderRadius: '15px',
-              padding: '30px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
+              minHeight: '280px',
               textAlign: 'center',
-              minHeight: '200px',
+              cursor: 'pointer',
+              borderWidth: selectedGameMode === mode.id ? '3px' : '2px',
+              boxShadow: selectedGameMode === mode.id 
+                ? `0 12px 35px ${mode.color}50, ${SHADOWS.xl}`
+                : hoveredGameMode === mode.id 
+                ? `0 10px 30px ${mode.color}30, ${SHADOWS.lg}`
+                : SHADOWS.base,
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between'
             }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = 'scale(1.05)';
-              e.target.style.boxShadow = `0 10px 30px ${mode.color}50`;
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'scale(1)';
-              e.target.style.boxShadow = 'none';
-            }}
           >
             <div>
-              <div style={{ fontSize: '48px', marginBottom: '15px' }}>
+              {/* Game Mode Icon */}
+              <div style={{
+                fontSize: TYPOGRAPHY.fontSize['4xl'],
+                marginBottom: SPACING.lg
+              }}>
                 {mode.icon}
               </div>
+
+              {/* Game Mode Name */}
               <h2 style={{
-                fontSize: '24px',
-                margin: '0 0 5px 0',
-                color: mode.color
+                fontSize: TYPOGRAPHY.fontSize['2xl'],
+                margin: `0 0 ${SPACING.sm} 0`,
+                color: mode.color,
+                fontWeight: TYPOGRAPHY.fontWeight.bold,
+                fontFamily: TYPOGRAPHY.fontFamily.primary
               }}>
                 {mode.name}
               </h2>
+
+              {/* Subtitle */}
               <h3 style={{
-                fontSize: '16px',
-                margin: '0 0 15px 0',
-                color: '#ccc',
-                fontWeight: 'normal'
+                fontSize: TYPOGRAPHY.fontSize.lg,
+                margin: `0 0 ${SPACING.base} 0`,
+                color: COLORS.text.secondary,
+                fontWeight: TYPOGRAPHY.fontWeight.normal
               }}>
                 {mode.subtitle}
               </h3>
+
+              {/* Description */}
               <p style={{
-                fontSize: '14px',
-                lineHeight: '1.4',
-                color: '#e0e0e0',
-                margin: '0 0 15px 0'
+                fontSize: TYPOGRAPHY.fontSize.base,
+                lineHeight: '1.5',
+                color: COLORS.text.secondary,
+                margin: `0 0 ${SPACING.lg} 0`
               }}>
                 {mode.description}
               </p>
             </div>
+
+            {/* Player Count Badge */}
             <div style={{
               background: `${mode.color}30`,
-              padding: '8px 15px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              color: mode.color
+              padding: `${SPACING.sm} ${SPACING.base}`,
+              borderRadius: RADIUS.full,
+              fontSize: TYPOGRAPHY.fontSize.sm,
+              fontWeight: TYPOGRAPHY.fontWeight.bold,
+              color: mode.color,
+              border: `1px solid ${mode.color}50`,
+              alignSelf: 'center'
             }}>
               👥 {mode.players} Players
             </div>
-          </div>
+
+            {selectedGameMode === mode.id && (
+              <div style={{
+                marginTop: SPACING.lg,
+                padding: SPACING.base,
+                background: mode.color,
+                borderRadius: RADIUS.lg,
+                fontSize: TYPOGRAPHY.fontSize.lg,
+                fontWeight: TYPOGRAPHY.fontWeight.bold,
+                color: COLORS.text.dark,
+                boxShadow: SHADOWS.lg,
+                textTransform: 'uppercase'
+              }}>
+                ✅ MODE SELECTED
+              </div>
+            )}
+          </Card>
         ))}
       </div>
-      
-      <button
-        onClick={onBack}
-        style={{
-          padding: '15px 40px',
-          fontSize: '18px',
-          backgroundColor: '#666',
-          color: 'white',
-          border: 'none',
-          borderRadius: '10px',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          marginTop: '30px',
-          transition: 'all 0.3s ease'
-        }}
-        onMouseEnter={(e) => e.target.style.backgroundColor = '#888'}
-        onMouseLeave={(e) => e.target.style.backgroundColor = '#666'}
-      >
-        ⬅️ BACK TO LOBBY
-      </button>
+
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: SPACING.xl, alignItems: 'center' }}>
+        <Button
+          onClick={onBack}
+          variant="back"
+          icon="⬅️"
+          size="lg"
+        >
+          BACK TO LOBBY
+        </Button>
+        
+        <Button
+          onClick={handleConfirm}
+          disabled={!selectedGameMode}
+          variant={selectedGameMode ? "primary" : "disabled"}
+          icon="🚀"
+          size="lg"
+        >
+          SELECT MODE & CONTINUE
+        </Button>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,38 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PointerLockControls, Sky, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
+// Add CSS animations for death screen
+const deathScreenStyles = `
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes gentleBounce {
+    0%, 20%, 50%, 80%, 100% { transform: rotate(-15deg) translateY(0); }
+    40% { transform: rotate(-15deg) translateY(-10px); }
+    60% { transform: rotate(-15deg) translateY(-5px); }
+  }
+  
+  @keyframes blink {
+    0%, 90%, 100% { opacity: 1; }
+    95% { opacity: 0.3; }
+  }
+  
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+`;
+
+// Inject styles if not already present
+if (!document.querySelector('#death-screen-styles')) {
+  const styleSheet = document.createElement('style');
+  styleSheet.id = 'death-screen-styles';
+  styleSheet.textContent = deathScreenStyles;
+  document.head.appendChild(styleSheet);
+}
+
 // Import game systems
 import { Player } from './player/Player.js';
 import { AssetLoader } from './utils/AssetLoader.js';
@@ -987,8 +1019,7 @@ function ReloadProgressCircle() {
   );
 }
 
-// Subtle Weapons UI Component (Right Side)
-function WeaponsUI({ weaponStats }) {
+function WeaponsUI({ weaponStats, gameStats }) {
   if (!weaponStats) return null;
 
   const { currentWeapon, currentAmmo, maxAmmo, isReloading, primaryWeapon, secondaryWeapon, selectedClass } = weaponStats;
@@ -1005,6 +1036,57 @@ function WeaponsUI({ weaponStats }) {
       gap: '20px',
       zIndex: 1000
     }}>
+      {/* Health Display - More Prominent */}
+      <div style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        borderRadius: '12px',
+        padding: '15px 20px',
+        border: '2px solid rgba(255, 107, 107, 0.8)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+        minWidth: '140px'
+      }}>
+        {/* HP Label and Number */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '8px'
+        }}>
+          <span style={{
+            color: '#ff6b6b',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            letterSpacing: '1px'
+          }}>
+            ❤️ HEALTH
+          </span>
+          <span style={{
+            color: 'white',
+            fontSize: '20px',
+            fontWeight: 'bold'
+          }}>
+            {gameStats.health}/100
+          </span>
+        </div>
+        
+        {/* Health Bar */}
+        <div style={{
+          width: '100%',
+          height: '10px',
+          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+          borderRadius: '5px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            width: `${gameStats.health}%`,
+            height: '100%',
+            backgroundColor: gameStats.health > 60 ? '#4ecdc4' : gameStats.health > 30 ? '#ffe66d' : '#ff6b6b',
+            transition: 'all 0.3s ease',
+            borderRadius: '5px'
+          }} />
+        </div>
+      </div>
+
       {/* Current Ammo - Larger and More Prominent */}
       <div style={{
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -1119,135 +1201,10 @@ function GameHUD({ gameStats, weaponStats, playerPosition, onSettingsOpen }) {
         }} />
       </div>
 
-      {/* HP Bar - Top Left */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        zIndex: 1000
-      }}>
-        {/* Health Bar Background */}
-        <div style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          borderRadius: '12px',
-          padding: '8px 12px',
-          border: '2px solid rgba(255, 107, 107, 0.6)',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
-          minWidth: '200px'
-        }}>
-          {/* HP Label and Number */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '6px'
-          }}>
-            <span style={{
-              color: '#ff6b6b',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              letterSpacing: '1px'
-            }}>
-              ❤️ HEALTH
-            </span>
-            <span style={{
-              color: 'white',
-              fontSize: '16px',
-              fontWeight: 'bold'
-            }}>
-              {gameStats.health}/100
-            </span>
-          </div>
-          
-          {/* Health Bar */}
-          <div style={{
-            width: '100%',
-            height: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-            borderRadius: '4px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              width: `${gameStats.health}%`,
-              height: '100%',
-              backgroundColor: gameStats.health > 60 ? '#4ecdc4' : gameStats.health > 30 ? '#ffe66d' : '#ff6b6b',
-              transition: 'all 0.3s ease',
-              borderRadius: '4px'
-            }} />
-          </div>
-        </div>
-      </div>
 
-      {/* Coordinates Display */}
-      {playerPosition && (
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '20px',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          border: '2px solid #4ecdc4',
-          borderRadius: '8px',
-          padding: '15px',
-          color: 'white',
-          fontFamily: 'monospace',
-          fontSize: '14px',
-          minWidth: '180px',
-          zIndex: 1000
-        }}>
-          <div style={{ color: '#4ecdc4', fontSize: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
-            📍 COORDINATES
-          </div>
-          <div style={{ color: '#ff6b6b' }}>X: {playerPosition.x.toFixed(2)}</div>
-          <div style={{ color: '#4ecdc4' }}>Y: {playerPosition.y.toFixed(2)}</div>
-          <div style={{ color: '#ffe66d' }}>Z: {playerPosition.z.toFixed(2)}</div>
-          <div style={{ color: '#95e1d3', fontSize: '12px', marginTop: '8px' }}>
-            💡 Copy for spawn points
-          </div>
-        </div>
-      )}
 
-      {/* Settings Button */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 1000
-      }}>
-        <button
-          onClick={onSettingsOpen}
-          style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            color: 'white',
-            border: '2px solid #4ecdc4',
-            borderRadius: '8px',
-            padding: '12px 20px',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = 'rgba(78, 205, 196, 0.2)';
-            e.target.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-            e.target.style.transform = 'scale(1)';
-          }}
-        >
-          ⚙️ Settings
-        </button>
-      </div>
-
-      {/* Enhanced Weapons UI */}
-      <WeaponsUI weaponStats={weaponStats} />
+      {/* Enhanced Weapons UI with Health */}
+      <WeaponsUI weaponStats={weaponStats} gameStats={gameStats} />
     </div>
   );
 }
@@ -1429,7 +1386,7 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
         onSettingsOpen={() => setShowSettings(true)}
       />
 
-      {/* Death Screen */}
+      {/* Enhanced Death Screen */}
       {isDead && (
         <div style={{
           position: 'fixed',
@@ -1437,97 +1394,130 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
           left: 0,
           width: '100vw',
           height: '100vh',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          background: 'linear-gradient(135deg, rgba(20, 20, 40, 0.95), rgba(40, 20, 60, 0.95))',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 10000,
-          fontFamily: 'Arial, sans-serif'
+          fontFamily: 'Arial, sans-serif',
+          animation: 'fadeIn 0.5s ease-in'
         }}>
           {/* Death Message */}
           <div style={{
             textAlign: 'center',
-            marginBottom: '40px'
+            marginBottom: '40px',
+            marginTop: '-20px'
           }}>
             <div style={{
-              color: '#ff4444',
-              fontSize: '48px',
+              color: '#ff6b6b',
+              fontSize: '42px',
               fontWeight: 'bold',
-              marginBottom: '20px',
-              textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+              marginBottom: '15px',
+              textShadow: '3px 3px 6px rgba(0,0,0,0.8)',
+              animation: 'pulse 1.5s ease-in-out infinite'
             }}>
-              💀 YOU DIED
+              OH NO! 😵
+            </div>
+            <div style={{
+              color: '#ffe66d',
+              fontSize: '24px',
+              marginBottom: '15px',
+              fontWeight: 'bold',
+              textShadow: '2px 2px 4px rgba(0,0,0,0.6)'
+            }}>
+              Your brave hamster warrior fell in battle!
+            </div>
+            <div style={{
+              color: '#95e1d3',
+              fontSize: '18px',
+              marginBottom: '20px'
+            }}>
+              Don't worry - heroes always get back up! 💪
             </div>
             <div style={{
               color: '#ffffff',
-              fontSize: '20px',
-              marginBottom: '10px'
+              fontSize: '16px',
+              background: 'rgba(255, 107, 107, 0.2)',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              border: '2px solid rgba(255, 107, 107, 0.4)',
+              display: 'inline-block'
             }}>
-              Your hamster has been eliminated!
-            </div>
-            <div style={{
-              color: '#cccccc',
-              fontSize: '16px'
-            }}>
-              Health: {gameStats.health}/100
+              ❤️ Health: {gameStats.health}/100
             </div>
           </div>
 
-          {/* Respawn Button */}
-          <button
-            onClick={handleManualRespawn}
-            style={{
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: 'none',
-              padding: '15px 30px',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              marginBottom: '20px',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = '#45a049';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = '#4CAF50';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          >
-            🔄 RESPAWN
-          </button>
+          {/* Action Buttons Container */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '15px',
+            alignItems: 'center'
+          }}>
+            {/* Respawn Button - Main Action */}
+            <button
+              onClick={handleManualRespawn}
+              style={{
+                background: 'linear-gradient(45deg, #4ecdc4, #44a08d)',
+                color: 'white',
+                border: '3px solid rgba(78, 205, 196, 0.8)',
+                padding: '18px 35px',
+                fontSize: '20px',
+                fontWeight: 'bold',
+                borderRadius: '25px',
+                cursor: 'pointer',
+                boxShadow: '0 6px 20px rgba(78, 205, 196, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.2)',
+                transition: 'all 0.3s ease',
+                minWidth: '220px',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
+                animation: 'pulse 2s ease-in-out infinite'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = 'linear-gradient(45deg, #5fded7, #4db6a8)';
+                e.target.style.transform = 'translateY(-3px) scale(1.05)';
+                e.target.style.boxShadow = '0 8px 25px rgba(78, 205, 196, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.3)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
+                e.target.style.transform = 'translateY(0) scale(1)';
+                e.target.style.boxShadow = '0 6px 20px rgba(78, 205, 196, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.2)';
+              }}
+            >
+              ⚡ RESPAWN & FIGHT AGAIN! 🐹
+            </button>
 
-          {/* Exit Button */}
-          <button
-            onClick={handleExitToMenu}
-            style={{
-              backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = '#da190b';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = '#f44336';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          >
-            🚪 EXIT TO MENU
-          </button>
+            {/* Exit Button - Secondary Action */}
+            <button
+              onClick={handleExitToMenu}
+              style={{
+                background: 'linear-gradient(45deg, #95a5a6, #7f8c8d)',
+                color: 'white',
+                border: '2px solid rgba(149, 165, 166, 0.8)',
+                padding: '12px 25px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(149, 165, 166, 0.3)',
+                transition: 'all 0.3s ease',
+                minWidth: '180px',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = 'linear-gradient(45deg, #a3b4b5, #8a9596)';
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 16px rgba(149, 165, 166, 0.5)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = 'linear-gradient(45deg, #95a5a6, #7f8c8d)';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 12px rgba(149, 165, 166, 0.3)';
+              }}
+            >
+              🏠 Return to Lobby
+            </button>
+          </div>
         </div>
       )}
 
@@ -2174,6 +2164,6 @@ function showKillNotification(killData) {
       }
     }, 300);
   }, 4000);
-}
-
-export default GameEngine;
+  }
+  
+  export default GameEngine;
