@@ -2,13 +2,13 @@
 // Central source of truth for all UI styling
 
 export const COLORS = {
-  // Primary Brand Colors
-  primary: '#4ecdc4',      // Teal
-  secondary: '#ff6b6b',    // Coral Red
-  accent: '#ffe66d',       // Golden Yellow
-  success: '#4CAF50',      // Green
-  warning: '#ffc107',      // Amber
-  danger: '#f44336',       // Red
+  // Primary Brand Colors (Cartoon-friendly)
+  primary: '#FF8C42',      // Warm Orange (hamster-like)
+  secondary: '#FFD23F',    // Sunny Yellow
+  accent: '#7B68EE',       // Soft Purple
+  success: '#32CD32',      // Lime Green
+  warning: '#FFA500',      // Orange
+  danger: '#FF6347',       // Tomato Red
   
   // Background Gradients
   background: {
@@ -28,26 +28,26 @@ export const COLORS = {
     dark: '#000000',
   },
   
-  // Class-specific Colors
+  // Class-specific Colors (Cartoon-friendly)
   classes: {
-    'Tactical Chewer': '#4ecdc4',
-    'Fluff \'n\' reload': '#ff6b6b',
-    'Squeak or be Squeakened': '#ffe66d',
-    'Guns and Whiskers': '#95e1d3'
+    'Tactical Chewer': '#FF8C42',     // Warm Orange
+    'Fluff \'n\' reload': '#FFD23F',  // Sunny Yellow
+    'Squeak or be Squeakened': '#7B68EE', // Soft Purple
+    'Guns and Whiskers': '#32CD32'    // Lime Green
   },
   
-  // Team Colors
+  // Team Colors (Cartoon-friendly)
   teams: {
-    'cheek-stuffers': '#4ecdc4',
-    'wheel-warriors': '#ff6b6b'
+    'cheek-stuffers': '#FF8C42',      // Warm Orange
+    'wheel-warriors': '#7B68EE'       // Soft Purple
   }
 };
 
 export const TYPOGRAPHY = {
   // Font Families
   fontFamily: {
-    primary: "'Orbitron', 'Arial', sans-serif",
-    secondary: "'Rajdhani', 'Arial', sans-serif",
+    primary: "'Comic Sans MS', 'Trebuchet MS', 'Arial', cursive, sans-serif", // Fun cartoon font
+    secondary: "'Trebuchet MS', 'Arial', sans-serif", // Friendly but readable
     fallback: "'Arial', sans-serif"
   },
   
@@ -194,26 +194,30 @@ export const COMPONENTS = {
     }
   },
   
-  // Header Styles
+  // Header Styles (Cartoon-friendly)
   header: {
     title: {
       fontFamily: TYPOGRAPHY.fontFamily.primary,
       fontSize: TYPOGRAPHY.fontSize['4xl'],
       fontWeight: TYPOGRAPHY.fontWeight.extrabold,
-      textShadow: TYPOGRAPHY.textShadow.lg,
+      textShadow: '3px 3px 0px #8B4513, 5px 5px 10px rgba(0,0,0,0.3)',
       margin: '0 0 20px 0',
-      background: `linear-gradient(45deg, ${COLORS.primary}, ${COLORS.secondary})`,
+      background: `linear-gradient(45deg, ${COLORS.primary}, ${COLORS.secondary}, ${COLORS.accent})`,
       WebkitBackgroundClip: 'text',
       WebkitTextFillColor: 'transparent',
-      backgroundClip: 'text'
+      backgroundClip: 'text',
+      transform: 'rotate(-1deg)',
+      letterSpacing: '2px'
     },
     
     subtitle: {
       fontFamily: TYPOGRAPHY.fontFamily.secondary,
       fontSize: TYPOGRAPHY.fontSize.xl,
-      fontWeight: TYPOGRAPHY.fontWeight.medium,
-      color: COLORS.text.secondary,
-      margin: '10px 0'
+      fontWeight: TYPOGRAPHY.fontWeight.bold,
+      color: COLORS.secondary,
+      margin: '10px 0',
+      textShadow: '2px 2px 4px rgba(139, 69, 19, 0.5)',
+      transform: 'rotate(0.5deg)'
     }
   },
   

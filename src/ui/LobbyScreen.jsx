@@ -795,24 +795,48 @@ export function LobbyScreen({ onStartGame, onBack }) {
           backdropFilter: 'blur(10px)'
         }}>
           <h1 style={{
-            fontSize: '32px',
+            fontSize: '40px',
             margin: '0',
-            textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-            background: 'linear-gradient(45deg, #00ff00, #4ecdc4)',
+            fontFamily: 'Comic Sans MS, cursive, fantasy',
+            fontWeight: '900',
+            textShadow: '3px 3px 0px #8B4513, 6px 6px 10px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(45deg, #FF6B35, #F7931E, #FFD23F, #FF6B35)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
+            backgroundClip: 'text',
+            transform: 'rotate(-2deg)',
+            letterSpacing: '2px',
+            animation: 'bounce 2s ease-in-out infinite'
           }}>
-            🐹 HAMSTER HUNTER
+            🐹 HAMSTER HUNTER 🔫
           </h1>
           <p style={{
-            fontSize: '16px',
-            margin: '5px 0 0 0',
-            color: '#e0e0e0',
-            textShadow: '1px 1px 2px rgba(0,0,0,0.6)'
+            fontSize: '18px',
+            margin: '8px 0 0 0',
+            color: '#FFD700',
+            fontFamily: 'Comic Sans MS, cursive, fantasy',
+            fontWeight: 'bold',
+            textShadow: '2px 2px 4px rgba(139, 69, 19, 0.8)',
+            transform: 'rotate(1deg)',
+            letterSpacing: '1px'
           }}>
-            Elite Hamster Warfare Academy
+            🔫 Lock and Load, Hamsters! 🔫
           </p>
+          
+          {/* Fun cartoon styling */}
+          <style jsx>{`
+            @keyframes bounce {
+              0%, 20%, 50%, 80%, 100% {
+                transform: rotate(-2deg) translateY(0);
+              }
+              40% {
+                transform: rotate(-2deg) translateY(-5px);
+              }
+              60% {
+                transform: rotate(-2deg) translateY(-3px);
+              }
+            }
+          `}</style>
           
           {/* Audio Status Notification */}
           {!audioStarted && (
@@ -845,53 +869,31 @@ export function LobbyScreen({ onStartGame, onBack }) {
             style={{
               padding: '15px 30px',
               fontSize: '18px',
-              backgroundColor: '#00ff00',
-              color: '#000',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
+              fontFamily: 'Comic Sans MS, cursive, fantasy',
+              fontWeight: '900',
               textTransform: 'uppercase',
+              background: 'linear-gradient(45deg, #FF6B35, #F7931E, #FFD23F, #FF6B35)',
+              color: '#000',
+              border: '3px solid #8B4513',
+              borderRadius: '15px',
+              cursor: 'pointer',
+              textShadow: '2px 2px 0px rgba(139, 69, 19, 0.5)',
+              boxShadow: '0 6px 15px rgba(255, 107, 53, 0.4), inset 0 2px 5px rgba(255, 255, 255, 0.3)',
               transition: 'all 0.3s ease',
-              boxShadow: '0 4px 12px rgba(0,255,0,0.4)',
-              width: '200px'
+              width: '220px',
+              letterSpacing: '1px',
+              transform: 'rotate(-1deg)'
             }}
             onMouseEnter={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 6px 18px rgba(0,255,0,0.6)';
+              e.target.style.transform = 'rotate(-1deg) translateY(-3px) scale(1.05)';
+              e.target.style.boxShadow = '0 8px 20px rgba(255, 107, 53, 0.6), inset 0 2px 5px rgba(255, 255, 255, 0.4)';
             }}
             onMouseLeave={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 4px 12px rgba(0,255,0,0.4)';
+              e.target.style.transform = 'rotate(-1deg) translateY(0) scale(1)';
+              e.target.style.boxShadow = '0 6px 15px rgba(255, 107, 53, 0.4), inset 0 2px 5px rgba(255, 255, 255, 0.3)';
             }}
           >
             🎮 PLAY GAME
-          </button>
-
-          <button
-            onClick={() => window.location.reload()} // Quick play - could be enhanced
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              backgroundColor: '#0080ff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              transition: 'all 0.3s ease',
-              width: '200px'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#0099ff';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#0080ff';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          >
-            🔫 QUICK PLAY
           </button>
 
           <button
@@ -899,22 +901,27 @@ export function LobbyScreen({ onStartGame, onBack }) {
             style={{
               padding: '12px 24px',
               fontSize: '16px',
-              backgroundColor: '#ff8000',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
+              fontFamily: 'Comic Sans MS, cursive, fantasy',
+              fontWeight: '800',
+              background: 'linear-gradient(45deg, #FF9500, #FFA726, #FFB74D, #FF9500)',
+              color: '#000',
+              border: '3px solid #E65100',
+              borderRadius: '12px',
               cursor: 'pointer',
-              fontWeight: 'bold',
+              textShadow: '1px 1px 0px rgba(230, 81, 0, 0.5)',
+              boxShadow: '0 5px 12px rgba(255, 149, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3)',
               transition: 'all 0.3s ease',
-              width: '200px'
+              width: '220px',
+              letterSpacing: '0.5px',
+              transform: 'rotate(-0.5deg)'
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#ff9000';
-              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.transform = 'rotate(-0.5deg) translateY(-2px) scale(1.03)';
+              e.target.style.boxShadow = '0 7px 16px rgba(255, 149, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.4)';
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#ff8000';
-              e.target.style.transform = 'translateY(0)';
+              e.target.style.transform = 'rotate(-0.5deg) translateY(0) scale(1)';
+              e.target.style.boxShadow = '0 5px 12px rgba(255, 149, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3)';
             }}
           >
             ⚙️ SETTINGS
@@ -925,24 +932,27 @@ export function LobbyScreen({ onStartGame, onBack }) {
             style={{
               padding: '12px 24px',
               fontSize: '16px',
-              backgroundColor: 'rgba(255,255,255,0.15)',
-              color: 'white',
-              border: '2px solid rgba(255,255,255,0.3)',
-              borderRadius: '10px',
+              fontFamily: 'Comic Sans MS, cursive, fantasy',
+              fontWeight: '800',
+              background: 'linear-gradient(45deg, #6C757D, #868E96, #ADB5BD, #6C757D)',
+              color: '#000',
+              border: '3px solid #495057',
+              borderRadius: '12px',
               cursor: 'pointer',
-              fontWeight: 'bold',
+              textShadow: '1px 1px 0px rgba(73, 80, 87, 0.5)',
+              boxShadow: '0 5px 12px rgba(108, 117, 125, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3)',
               transition: 'all 0.3s ease',
-              width: '200px'
+              width: '220px',
+              letterSpacing: '0.5px',
+              transform: 'rotate(0.3deg)'
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = 'rgba(255,255,255,0.25)';
-              e.target.style.borderColor = 'rgba(255,255,255,0.5)';
-              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.transform = 'rotate(0.3deg) translateY(-2px) scale(1.03)';
+              e.target.style.boxShadow = '0 7px 16px rgba(108, 117, 125, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.4)';
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'rgba(255,255,255,0.15)';
-              e.target.style.borderColor = 'rgba(255,255,255,0.3)';
-              e.target.style.transform = 'translateY(0)';
+              e.target.style.transform = 'rotate(0.3deg) translateY(0) scale(1)';
+              e.target.style.boxShadow = '0 5px 12px rgba(108, 117, 125, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3)';
             }}
           >
             🚪 EXIT GAME

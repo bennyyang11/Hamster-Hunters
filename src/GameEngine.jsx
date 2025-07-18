@@ -82,14 +82,14 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         console.warn('⚠️ Could not load hamster model, will use fallback');
       }
 
-      // Setup camera for third-person with optimized view distance
+      // Setup camera for third-person with extended view distance for large maps
       camera.position.set(0, 5, 10);
       camera.rotation.set(-0.2, 0, 0); // Look slightly downward
       camera.fov = 75;
       camera.near = 0.1; // Close clipping plane
-      camera.far = 1000; // Optimized far clipping plane (reduced from 5000)
+      camera.far = 5000; // Extended far clipping plane for large maps like Nuketown
       camera.updateProjectionMatrix();
-      console.log('📷 Camera configured with optimized view distance (far: 1000) for better performance');
+      console.log('📷 Camera configured with extended view distance (far: 5000) for large map visibility');
 
       // Disable fog to ensure clear long-distance visibility
       scene.fog = null;
@@ -643,6 +643,12 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           // Load Nuketown map from Call of Duty
           const nuketown = await assetLoader.loadMapModel("nuketown", "/assets/models/maps/nuketown_from_call_of_duty...glb");
           if (nuketown) {
+            // Register map with render optimizer to prevent buildings from being culled
+            if (renderOptimizer) {
+              renderOptimizer.registerMapObject(nuketown);
+              console.log('🏢 Nuketown map registered for permanent visibility (no culling)');
+            }
+            
             scene.add(nuketown);
             console.log('🗺️ Call of Duty Nuketown map added to scene');
           }
@@ -685,17 +691,24 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
     initializeGame();
       }, [scene, camera, gl, selectedWeapon, selectedClass, isPaused]); // Added selectedClass to dependency array
 
-  // Game loop
+  // Optimized game loop with throttled updates
+  let lastUIUpdate = 0;
   useFrame((state, delta) => {
     const gameState = gameStateRef.current;
     if (!gameState.isInitialized || isPaused) return; // Skip updates when paused
 
-    // Update player
+    // Update player (high priority - every frame)
     if (gameState.player) {
       gameState.player.update(delta);
+    }
+    
+    // Throttle UI updates to reduce computational overhead (30 FPS instead of 60)
+    const now = performance.now();
+    if (now - lastUIUpdate > 33) { // ~30 FPS for UI updates
+      lastUIUpdate = now;
       
-      // Update weapon stats for UI
-      if (onUpdateWeaponStats && gameState.player.weaponManager) {
+      // Update weapon stats for UI (throttled)
+      if (onUpdateWeaponStats && gameState.player?.weaponManager) {
         const currentWeapon = gameState.player.weaponManager.getCurrentWeapon();
         const ammoStatus = gameState.player.weaponManager.getAmmoStatus();
         const classData = getClassWeapons(selectedClass);
@@ -711,8 +724,8 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         });
       }
 
-      // Update player position for coordinate display
-      if (onUpdatePlayerPosition && gameState.player.position) {
+      // Update player position for coordinate display (throttled)
+      if (onUpdatePlayerPosition && gameState.player?.position) {
         onUpdatePlayerPosition({
           x: gameState.player.position.x,
           y: gameState.player.position.y,
@@ -862,86 +875,93 @@ function WeaponsUI({ weaponStats }) {
   return (
     <div style={{
       position: 'absolute',
-      bottom: '100px',
-      right: '20px',
+      bottom: '80px',
+      left: '50%',
+      transform: 'translateX(-50%)',
       display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'flex-end',
-      gap: '8px',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: '20px',
       zIndex: 1000
     }}>
-      {/* Weapon Selection - Compact */}
+      {/* Current Ammo - Larger and More Prominent */}
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px',
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
-        borderRadius: '6px',
-        padding: '8px',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
-      }}>
-        {/* Primary Weapon */}
-        <div style={{
-          backgroundColor: currentWeapon === primaryWeapon ? 'rgba(78, 205, 196, 0.4)' : 'rgba(0, 0, 0, 0.3)',
-          border: currentWeapon === primaryWeapon ? '1px solid rgba(78, 205, 196, 0.6)' : '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '4px',
-          padding: '6px 10px',
-          color: 'white',
-          fontSize: '12px',
-          fontWeight: currentWeapon === primaryWeapon ? 'bold' : 'normal',
-          textAlign: 'center',
-          minWidth: '70px',
-          opacity: currentWeapon === primaryWeapon ? 1.0 : 0.7
-        }}>
-          <div style={{ color: '#4ecdc4', fontSize: '10px' }}>1</div>
-          <div style={{ fontSize: '11px' }}>{primaryWeapon}</div>
-        </div>
-
-        {/* Secondary Weapon */}
-        <div style={{
-          backgroundColor: currentWeapon === secondaryWeapon ? 'rgba(255, 107, 107, 0.4)' : 'rgba(0, 0, 0, 0.3)',
-          border: currentWeapon === secondaryWeapon ? '1px solid rgba(255, 107, 107, 0.6)' : '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '4px',
-          padding: '6px 10px',
-          color: 'white',
-          fontSize: '12px',
-          fontWeight: currentWeapon === secondaryWeapon ? 'bold' : 'normal',
-          textAlign: 'center',
-          minWidth: '70px',
-          opacity: currentWeapon === secondaryWeapon ? 1.0 : 0.7
-        }}>
-          <div style={{ color: '#ff6b6b', fontSize: '10px' }}>2</div>
-          <div style={{ fontSize: '11px' }}>{secondaryWeapon}</div>
-        </div>
-      </div>
-
-      {/* Current Ammo - Compact */}
-      <div style={{
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-        borderRadius: '6px',
-        padding: '8px 12px',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        borderRadius: '12px',
+        padding: '15px 25px',
         color: 'white',
         textAlign: 'center',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        minWidth: '90px'
+        border: '2px solid rgba(255, 230, 109, 0.6)',
+        minWidth: '120px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
       }}>
         <div style={{ 
           color: isReloading ? '#ff6b6b' : '#ffe66d', 
-          fontSize: '16px', 
-          fontWeight: 'bold'
+          fontSize: '24px', 
+          fontWeight: 'bold',
+          marginBottom: '4px'
         }}>
-          {isReloading ? '⟳' : `${currentAmmo}/${maxAmmo}`}
+          {isReloading ? '⟳ RELOADING' : `${currentAmmo}/${maxAmmo}`}
         </div>
         
         {!isReloading && (
           <div style={{
-            color: 'rgba(255, 255, 255, 0.6)',
-            fontSize: '10px',
-            marginTop: '2px'
+            color: 'rgba(255, 255, 255, 0.8)',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            letterSpacing: '1px'
           }}>
             AMMO
           </div>
         )}
+      </div>
+
+      {/* Weapon Selection - Horizontal Layout */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '12px',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        borderRadius: '12px',
+        padding: '12px 16px',
+        border: '2px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
+      }}>
+        {/* Primary Weapon */}
+        <div style={{
+          backgroundColor: currentWeapon === primaryWeapon ? 'rgba(78, 205, 196, 0.6)' : 'rgba(0, 0, 0, 0.4)',
+          border: currentWeapon === primaryWeapon ? '2px solid rgba(78, 205, 196, 0.8)' : '2px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          color: 'white',
+          fontSize: '14px',
+          fontWeight: currentWeapon === primaryWeapon ? 'bold' : 'normal',
+          textAlign: 'center',
+          minWidth: '80px',
+          opacity: currentWeapon === primaryWeapon ? 1.0 : 0.7,
+          transition: 'all 0.3s ease'
+        }}>
+          <div style={{ color: '#4ecdc4', fontSize: '12px', fontWeight: 'bold' }}>1</div>
+          <div style={{ fontSize: '12px', marginTop: '2px' }}>{primaryWeapon}</div>
+        </div>
+
+        {/* Secondary Weapon */}
+        <div style={{
+          backgroundColor: currentWeapon === secondaryWeapon ? 'rgba(255, 107, 107, 0.6)' : 'rgba(0, 0, 0, 0.4)',
+          border: currentWeapon === secondaryWeapon ? '2px solid rgba(255, 107, 107, 0.8)' : '2px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          color: 'white',
+          fontSize: '14px',
+          fontWeight: currentWeapon === secondaryWeapon ? 'bold' : 'normal',
+          textAlign: 'center',
+          minWidth: '80px',
+          opacity: currentWeapon === secondaryWeapon ? 1.0 : 0.7,
+          transition: 'all 0.3s ease'
+        }}>
+          <div style={{ color: '#ff6b6b', fontSize: '12px', fontWeight: 'bold' }}>2</div>
+          <div style={{ fontSize: '12px', marginTop: '2px' }}>{secondaryWeapon}</div>
+        </div>
       </div>
     </div>
   );
@@ -976,6 +996,68 @@ function GameHUD({ gameStats, weaponStats, playerPosition, onSettingsOpen }) {
           borderRadius: '50%',
           boxShadow: '0 0 0 2px rgba(0,0,0,0.3)'
         }} />
+      </div>
+
+      {/* HP Bar - Top Left */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        left: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        zIndex: 1000
+      }}>
+        {/* Health Bar Background */}
+        <div style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          borderRadius: '12px',
+          padding: '8px 12px',
+          border: '2px solid rgba(255, 107, 107, 0.6)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+          minWidth: '200px'
+        }}>
+          {/* HP Label and Number */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '6px'
+          }}>
+            <span style={{
+              color: '#ff6b6b',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              letterSpacing: '1px'
+            }}>
+              ❤️ HEALTH
+            </span>
+            <span style={{
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: 'bold'
+            }}>
+              {gameStats.health}/100
+            </span>
+          </div>
+          
+          {/* Health Bar */}
+          <div style={{
+            width: '100%',
+            height: '8px',
+            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${gameStats.health}%`,
+              height: '100%',
+              backgroundColor: gameStats.health > 60 ? '#4ecdc4' : gameStats.health > 30 ? '#ffe66d' : '#ff6b6b',
+              transition: 'all 0.3s ease',
+              borderRadius: '4px'
+            }} />
+          </div>
+        </div>
       </div>
 
       {/* Coordinates Display */}
@@ -1042,51 +1124,9 @@ function GameHUD({ gameStats, weaponStats, playerPosition, onSettingsOpen }) {
           ⚙️ Settings
         </button>
       </div>
-      
-      {/* Health and stats */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        padding: '15px',
-        borderRadius: '5px',
-        color: 'white',
-        textAlign: 'right',
-        minWidth: '200px'
-      }}>
-        <div style={{ color: '#ff6b6b', fontSize: '18px', fontWeight: 'bold' }}>❤️ Health: {gameStats.health}/100</div>
-        <div style={{ color: '#4ecdc4', fontSize: '14px', marginTop: '5px' }}>🐹 Hamster Warrior</div>
-        <div style={{ color: '#ffe66d', fontSize: '12px' }}>Class: {weaponStats?.selectedClass?.name || 'Assault Hamster'}</div>
-      </div>
 
       {/* Enhanced Weapons UI */}
       <WeaponsUI weaponStats={weaponStats} />
-
-      {/* Instructions */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        padding: '15px',
-        borderRadius: '5px',
-        color: 'white',
-        fontSize: '14px',
-        minWidth: '180px'
-      }}>
-        <div style={{ color: '#4ecdc4', fontSize: '16px', marginBottom: '10px' }}>🐹 HAMSTER CONTROLS</div>
-        <div style={{ color: '#ff6b6b', fontSize: '14px', marginBottom: '8px', fontWeight: 'bold' }}>⚠️ CLICK ANYWHERE TO ACTIVATE MOVEMENT!</div>
-        <div>🎮 WASD - Move Hamster</div>
-        <div>🖱️ Mouse - Look Around</div>
-        <div>🔫 Left Click - Shoot</div>
-        <div>🏃 Shift - Sprint</div>
-        <div>🦘 Space - Jump</div>
-        <div style={{ color: '#95e1d3' }}>1/2 - Switch Weapons</div>
-        <div style={{ color: '#95e1d3' }}>⚙️ Settings Button - Adjust Sensitivity</div>
-                        <div>⏸️ ESC - Pause Menu</div>
-        <div style={{ color: '#ffe66d', fontSize: '12px', marginTop: '8px' }}>If movement stops working, click in the game area again!</div>
-      </div>
     </div>
   );
 }
@@ -1104,7 +1144,7 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
   const [showSettings, setShowSettings] = useState(false);
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showLoadoutScreen, setShowLoadoutScreen] = useState(false);
-  const [mouseSensitivity, setMouseSensitivity] = useState(2.0);
+  const [mouseSensitivity, setMouseSensitivity] = useState(1.0); // Reduced default for smoother movement
   const [soundVolume, setSoundVolume] = useState(0.3);
   const [musicVolume, setMusicVolume] = useState(0.2);
   const [playerPosition, setPlayerPosition] = useState(null);
@@ -1189,8 +1229,18 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
         camera={{ position: [0, 5, 10], fov: 75, rotation: [0, 0, 0] }}
         shadows
         onCreated={({ gl }) => {
+          // Configure renderer for optimal performance and smoothness
           gl.shadowMap.enabled = true;
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
+          gl.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Reduced for better performance
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          
+          // Enhanced settings for smooth rendering
+          gl.antialias = true;
+          gl.powerPreference = "high-performance";
+          gl.setClearColor(0x000000, 1);
+          
+          console.log('🎮 Renderer optimized for smooth 60 FPS gameplay');
         }}
       >
         <GameScene 

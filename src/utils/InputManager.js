@@ -4,7 +4,7 @@ export class InputManager {
     this.mouse = { x: 0, y: 0, deltaX: 0, deltaY: 0 };
     this.mouseButtons = {};
     this.isPointerLocked = false;
-    this.sensitivity = 0.004; // Mouse sensitivity
+    this.sensitivity = 0.002; // Reduced mouse sensitivity for smoother movement
     this.scrollDelta = 0; // Scroll wheel delta
     
     this.setupEventListeners();

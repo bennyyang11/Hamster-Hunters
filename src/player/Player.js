@@ -32,11 +32,11 @@ export class Player {
     // Camera properties - use provided camera or find in scene
     this.camera = camera || scene.children.find(child => child.isCamera) || new THREE.PerspectiveCamera();
     this.cameraRotation = new THREE.Euler(0, 0, 0, 'YXZ');
-    this.mouseSensitivity = 0.003; // Increased for better responsiveness
+    this.mouseSensitivity = 0.0015; // Reduced for smoother movement
     this.cameraDistance = 180; // Default camera distance (zoomable)
     this.minCameraDistance = 80; // Minimum zoom distance
     this.maxCameraDistance = 400; // Maximum zoom distance
-    this.mouseSensitivityMultiplier = 2.0; // Default sensitivity multiplier (adjustable in settings)
+    this.mouseSensitivityMultiplier = 1.0; // Reduced default sensitivity for smoother movement (adjustable in settings)
     
     // Camera view modes
     this.isFrontView = false; // Start in back third-person, toggle to front third-person

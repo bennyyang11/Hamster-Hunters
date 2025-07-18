@@ -5,17 +5,34 @@ export class LODManager {
   constructor(camera) {
     this.camera = camera;
     this.lodLevels = {
-      high: 50,     // High detail within 50 units
-      medium: 150,  // Medium detail 50-150 units
-      low: 300,     // Low detail 150-300 units
-      minimal: 500  // Minimal detail 300-500 units
+      high: 100,     // Extended high detail range
+      medium: 300,   // Extended medium detail range  
+      low: 600,      // Extended low detail range
+      minimal: 1000  // Extended minimal detail range
     };
     
     this.lodObjects = new Map(); // Track objects with LOD
+    this.excludedObjects = new Set(); // Objects that should maintain high detail (like map buildings)
+  }
+
+  // Add objects that should always maintain high detail (like map buildings)
+  excludeFromLOD(object) {
+    this.excludedObjects.add(object.uuid);
+    // Also exclude all children
+    object.traverse((child) => {
+      if (child.isMesh) {
+        this.excludedObjects.add(child.uuid);
+      }
+    });
   }
 
   // Register an object for LOD management
   registerLODObject(object, lodVersions) {
+    // Don't register excluded objects (like map buildings)
+    if (this.excludedObjects.has(object.uuid)) {
+      return;
+    }
+
     this.lodObjects.set(object.uuid, {
       object,
       lodVersions, // { high, medium, low, minimal }
@@ -27,6 +44,11 @@ export class LODManager {
   // Update LOD based on distance from camera
   updateLOD() {
     this.lodObjects.forEach((lodData) => {
+      // Skip LOD for excluded objects (map buildings)
+      if (this.excludedObjects.has(lodData.object.uuid)) {
+        return;
+      }
+
       const distance = this.camera.position.distanceTo(lodData.object.position);
       let targetLOD = 'minimal';
 
@@ -80,6 +102,18 @@ export class FrustumCuller {
     this.frustum = new THREE.Frustum();
     this.cameraMatrix = new THREE.Matrix4();
     this.culledObjects = new Set();
+    this.excludedObjects = new Set(); // Objects that should never be culled (like map buildings)
+  }
+
+  // Add objects that should never be culled (like map buildings)
+  excludeFromCulling(object) {
+    this.excludedObjects.add(object.uuid);
+    // Also exclude all children
+    object.traverse((child) => {
+      if (child.isMesh) {
+        this.excludedObjects.add(child.uuid);
+      }
+    });
   }
 
   // Update frustum based on camera
@@ -88,8 +122,13 @@ export class FrustumCuller {
     this.frustum.setFromProjectionMatrix(this.cameraMatrix);
   }
 
-  // Check if object is in view
+  // Check if object is in view (with more generous bounds for large objects)
   isInView(object) {
+    // Never cull excluded objects (like map buildings)
+    if (this.excludedObjects.has(object.uuid)) {
+      return true;
+    }
+
     if (!object.geometry || !object.geometry.boundingSphere) {
       object.geometry.computeBoundingSphere();
     }
@@ -97,14 +136,23 @@ export class FrustumCuller {
     const sphere = object.geometry.boundingSphere.clone();
     sphere.applyMatrix4(object.matrixWorld);
     
+    // Expand the sphere radius for more generous culling (prevents pop-in/out)
+    sphere.radius *= 1.5;
+    
     return this.frustum.intersectsSphere(sphere);
   }
 
-  // Cull objects outside frustum
+  // Cull objects outside frustum (but be more conservative)
   cullObjects(objects) {
     this.updateFrustum();
     
     objects.forEach(object => {
+      // Skip culling for excluded objects (map buildings)
+      if (this.excludedObjects.has(object.uuid)) {
+        object.visible = true;
+        return;
+      }
+
       const shouldBeVisible = this.isInView(object);
       
       if (object.visible !== shouldBeVisible) {
@@ -304,10 +352,31 @@ export class RenderOptimizer {
     this.performanceMonitor = new PerformanceMonitor();
     this.modelOptimizer = new ModelOptimizer();
     
-    this.updateInterval = 16; // Update optimizations every 16ms (60 FPS)
+    this.updateInterval = 200; // Reduced frequency to 200ms (5 FPS) for less aggressive culling
     this.lastUpdate = 0;
+    this.lastCullingUpdate = 0;
+    this.cullingInterval = 500; // Frustum culling only every 500ms (2 FPS) to prevent buildings popping
     
     this.isEnabled = true;
+    this.mapObjects = new Set(); // Track map objects that should never be culled
+  }
+
+  // Register map objects that should never be culled or have LOD applied
+  registerMapObject(object) {
+    this.mapObjects.add(object.uuid);
+    this.frustumCuller.excludeFromCulling(object);
+    this.lodManager.excludeFromLOD(object);
+    
+    // Ensure the object and all its children remain visible
+    object.traverse((child) => {
+      if (child.isMesh) {
+        child.visible = true;
+        child.frustumCulled = false; // Disable Three.js built-in frustum culling
+        this.mapObjects.add(child.uuid);
+      }
+    });
+    
+    console.log(`🏢 Registered map object for permanent visibility: ${object.name || 'unnamed'}`);
   }
 
   // Update all optimizations
@@ -323,16 +392,19 @@ export class RenderOptimizer {
     // Adjust optimization aggressiveness based on performance
     this.adjustOptimizationLevel();
     
-    // Update LOD
+    // Update LOD (but exclude map objects)
     this.lodManager.updateLOD();
     
-    // Frustum culling (less frequent for performance)
-    if (now - this.lastUpdate > 33) { // 30 FPS for culling
+    // Frustum culling (much less frequent and exclude map objects)
+    if (now - this.lastCullingUpdate > this.cullingInterval) {
       const meshes = [];
       scene.traverse((object) => {
-        if (object.isMesh) meshes.push(object);
+        if (object.isMesh && !this.mapObjects.has(object.uuid)) {
+          meshes.push(object);
+        }
       });
       this.frustumCuller.cullObjects(meshes);
+      this.lastCullingUpdate = now;
     }
     
     this.lastUpdate = now;
