@@ -275,7 +275,17 @@ export class BulletSystem {
 
   // Remove a player from collision detection
   removeOtherPlayer(playerId) {
-    this.otherPlayers.delete(playerId);
+    if (this.otherPlayers.has(playerId)) {
+      this.otherPlayers.delete(playerId);
+      console.log(`🔫 Removed player ${playerId} from bullet collision detection`);
+    }
+  }
+
+  // Clear all other players (for game reset)
+  clearAllOtherPlayers() {
+    const playerCount = this.otherPlayers.size;
+    this.otherPlayers.clear();
+    console.log(`🔫 Cleared ${playerCount} players from bullet collision detection`);
   }
 
   // Check if bullet hits any other players
@@ -288,7 +298,10 @@ export class BulletSystem {
     const bulletRadius = 5; // Bullet collision radius
 
     for (const [playerId, playerData] of this.otherPlayers) {
-      if (!playerData || !playerData.position || !playerData.mesh) {
+      // Skip local player - never hit yourself!
+      if (playerId === 'local_player' || 
+          playerData?.mesh?.userData?.isLocalPlayer === true ||
+          !playerData || !playerData.position || !playerData.mesh) {
         continue;
       }
 
@@ -301,7 +314,7 @@ export class BulletSystem {
       const playerHitboxRadius = 60; // Adjusted for large hamster size
       
       if (distance <= (bulletRadius + playerHitboxRadius)) {
-        console.log(`🎯 BULLET HIT PLAYER! Distance: ${distance.toFixed(1)}, Player: ${playerId}`);
+        console.log(`🎯 BULLET HIT OTHER PLAYER! Distance: ${distance.toFixed(1)}, Player: ${playerId}`);
         console.log(`🔍 Bullet: (${bulletPos.x.toFixed(1)}, ${bulletPos.y.toFixed(1)}, ${bulletPos.z.toFixed(1)})`);
         console.log(`🐹 Player: (${playerPos.x.toFixed(1)}, ${playerPos.y.toFixed(1)}, ${playerPos.z.toFixed(1)})`);
         

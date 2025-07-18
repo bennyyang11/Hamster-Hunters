@@ -736,9 +736,375 @@ function TeamSelectionScreen({ onTeamSelect, onBack, selectedGameMode }) {
   );
 }
 
+// Lobby Settings Component
+function LobbySettings({ onBack }) {
+  const [soundVolume, setSoundVolume] = useState(0.3);
+  const [musicVolume, setMusicVolume] = useState(0.2);
+  const [mouseSensitivity, setMouseSensitivity] = useState(1.0);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Breadcrumb steps  
+  const breadcrumbSteps = ['Lobby', 'Settings'];
+  const currentStep = 1;
+
+  // Apply settings to audio manager
+  const applyAudioSettings = () => {
+    sharedAudioManager.setSoundVolume(soundVolume);
+    sharedAudioManager.setMusicVolume(musicVolume);
+    console.log(`🔊 Audio settings applied: Sound ${soundVolume.toFixed(1)}, Music ${musicVolume.toFixed(1)}`);
+  };
+
+  // Save settings to localStorage
+  const saveSettings = () => {
+    const settings = {
+      soundVolume,
+      musicVolume,
+      mouseSensitivity,
+      fullscreen
+    };
+    localStorage.setItem('hamsterHunterSettings', JSON.stringify(settings));
+    console.log('💾 Settings saved to localStorage');
+  };
+
+  // Load settings from localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('hamsterHunterSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setSoundVolume(settings.soundVolume || 0.3);
+        setMusicVolume(settings.musicVolume || 0.2);
+        setMouseSensitivity(settings.mouseSensitivity || 1.0);
+        setFullscreen(settings.fullscreen || false);
+        console.log('📖 Settings loaded from localStorage');
+      } catch (error) {
+        console.warn('⚠️ Failed to load settings:', error);
+      }
+    }
+  }, []);
+
+  // Apply settings immediately when changed
+  useEffect(() => {
+    applyAudioSettings();
+  }, [soundVolume, musicVolume]);
+
+  const handleSaveAndExit = () => {
+    applyAudioSettings();
+    saveSettings();
+    onBack();
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setFullscreen(true);
+        console.log('🖥️ Entered fullscreen mode');
+      }).catch(err => {
+        console.warn('⚠️ Failed to enter fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setFullscreen(false);
+        console.log('🖥️ Exited fullscreen mode');
+      }).catch(err => {
+        console.warn('⚠️ Failed to exit fullscreen:', err);
+      });
+    }
+  };
+
+  return (
+    <>
+      {/* CSS for functional range sliders */}
+      <style>{`
+        .hamster-slider {
+          width: 100%;
+          height: 6px;
+          background: #333;
+          border-radius: 5px;
+          outline: none;
+          opacity: 0.8;
+          transition: opacity 0.2s;
+        }
+
+        .hamster-slider:hover {
+          opacity: 1;
+        }
+
+        .hamster-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #4ecdc4;
+          cursor: pointer;
+          border: 2px solid #fff;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .hamster-slider::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #4ecdc4;
+          cursor: pointer;
+          border: 2px solid #fff;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          border: none;
+        }
+
+        .hamster-slider-music::-webkit-slider-thumb {
+          background: #ffe66d;
+        }
+
+        .hamster-slider-music::-moz-range-thumb {
+          background: #ffe66d;
+        }
+
+        .hamster-slider-mouse::-webkit-slider-thumb {
+          background: #ff6b6b;
+        }
+
+        .hamster-slider-mouse::-moz-range-thumb {
+          background: #ff6b6b;
+        }
+      `}</style>
+
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100vh',
+        background: COLORS.background.secondary,
+        color: COLORS.text.primary,
+        fontFamily: TYPOGRAPHY.fontFamily.primary,
+        zIndex: 1000,
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        padding: SPACING.base,
+        boxSizing: 'border-box'
+      }}>
+        {/* Breadcrumb Navigation */}
+        <Breadcrumb steps={breadcrumbSteps} currentStep={currentStep} />
+
+        {/* Header */}
+        <Header 
+          title="⚙️ GAME SETTINGS"
+        subtitle="Configure your hamster warfare experience!"
+        style={{ marginBottom: SPACING.xl }}
+      />
+
+      {/* Settings Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: SPACING['2xl'],
+        maxWidth: '1000px',
+        width: '100%',
+        marginBottom: SPACING['2xl']
+      }}>
+        {/* Audio Settings */}
+        <Card style={{ padding: SPACING.xl }}>
+          <h3 style={{
+            fontSize: TYPOGRAPHY.fontSize['2xl'],
+            color: '#4ecdc4',
+            marginBottom: SPACING.lg,
+            textAlign: 'center'
+          }}>
+            🔊 AUDIO SETTINGS
+          </h3>
+
+          {/* Sound Volume */}
+          <div style={{ marginBottom: SPACING.lg }}>
+            <label style={{
+              display: 'block',
+              marginBottom: SPACING.sm,
+              fontSize: TYPOGRAPHY.fontSize.lg,
+              color: COLORS.text.primary,
+              fontWeight: TYPOGRAPHY.fontWeight.bold
+            }}>
+              🎯 Sound Effects: {Math.round(soundVolume * 100)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={soundVolume}
+              onChange={(e) => setSoundVolume(parseFloat(e.target.value))}
+              className="hamster-slider"
+            />
+          </div>
+
+          {/* Music Volume */}
+          <div style={{ marginBottom: SPACING.lg }}>
+            <label style={{
+              display: 'block',
+              marginBottom: SPACING.sm,
+              fontSize: TYPOGRAPHY.fontSize.lg,
+              color: COLORS.text.primary,
+              fontWeight: TYPOGRAPHY.fontWeight.bold
+            }}>
+              🎵 Background Music: {Math.round(musicVolume * 100)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={musicVolume}
+              onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+              className="hamster-slider hamster-slider-music"
+            />
+          </div>
+        </Card>
+
+        {/* Control Settings */}
+        <Card style={{ padding: SPACING.xl }}>
+          <h3 style={{
+            fontSize: TYPOGRAPHY.fontSize['2xl'],
+            color: '#ff6b6b',
+            marginBottom: SPACING.lg,
+            textAlign: 'center'
+          }}>
+            🖱️ CONTROL SETTINGS
+          </h3>
+
+          {/* Mouse Sensitivity */}
+          <div style={{ marginBottom: SPACING.lg }}>
+            <label style={{
+              display: 'block',
+              marginBottom: SPACING.sm,
+              fontSize: TYPOGRAPHY.fontSize.lg,
+              color: COLORS.text.primary,
+              fontWeight: TYPOGRAPHY.fontWeight.bold
+            }}>
+              🎯 Mouse Sensitivity: {mouseSensitivity.toFixed(1)}x
+            </label>
+                         <input
+               type="range"
+               min="0.1"
+               max="5.0"
+               step="0.1"
+               value={mouseSensitivity}
+               onChange={(e) => setMouseSensitivity(parseFloat(e.target.value))}
+               className="hamster-slider hamster-slider-mouse"
+             />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: SPACING.sm,
+              fontSize: TYPOGRAPHY.fontSize.sm,
+              color: COLORS.text.secondary
+            }}>
+              <span>0.1x (Slow)</span>
+              <span>5.0x (Fast)</span>
+            </div>
+          </div>
+
+          {/* Quick Sensitivity Presets */}
+          <div style={{ marginBottom: SPACING.lg }}>
+            <label style={{
+              display: 'block',
+              marginBottom: SPACING.sm,
+              fontSize: TYPOGRAPHY.fontSize.base,
+              color: COLORS.text.secondary
+            }}>
+              Quick Presets:
+            </label>
+            <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap' }}>
+              {[0.5, 1.0, 1.5, 2.0, 3.0].map(preset => (
+                <button
+                  key={preset}
+                  onClick={() => setMouseSensitivity(preset)}
+                  style={{
+                    padding: `${SPACING.xs} ${SPACING.sm}`,
+                    background: mouseSensitivity === preset ? '#ff6b6b' : 'rgba(255,255,255,0.1)',
+                    border: `1px solid ${mouseSensitivity === preset ? '#ff6b6b' : 'rgba(255,255,255,0.2)'}`,
+                    borderRadius: RADIUS.base,
+                    color: mouseSensitivity === preset ? '#000' : COLORS.text.primary,
+                    cursor: 'pointer',
+                    fontSize: TYPOGRAPHY.fontSize.sm,
+                    fontWeight: TYPOGRAPHY.fontWeight.bold,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {preset}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        {/* Display Settings */}
+        <Card style={{ padding: SPACING.xl, gridColumn: 'span 2' }}>
+          <h3 style={{
+            fontSize: TYPOGRAPHY.fontSize['2xl'],
+            color: '#ffe66d',
+            marginBottom: SPACING.lg,
+            textAlign: 'center'
+          }}>
+            🖥️ DISPLAY SETTINGS
+          </h3>
+
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: SPACING.xl }}>
+            <Button
+              onClick={toggleFullscreen}
+              variant={fullscreen ? "success" : "primary"}
+              icon={fullscreen ? "🔲" : "⛶"}
+              size="lg"
+            >
+              {fullscreen ? "EXIT FULLSCREEN" : "ENTER FULLSCREEN"}
+            </Button>
+
+            <div style={{
+              padding: SPACING.base,
+              background: 'rgba(255,230,109,0.1)',
+              borderRadius: RADIUS.lg,
+              border: '1px solid rgba(255,230,109,0.3)',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: TYPOGRAPHY.fontSize.sm, color: COLORS.text.secondary }}>
+                💡 Tip: Fullscreen provides the best gaming experience!
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: SPACING.xl, alignItems: 'center' }}>
+        <Button
+          onClick={onBack}
+          variant="back"
+          icon="⬅️"
+          size="lg"
+        >
+          BACK TO LOBBY
+        </Button>
+        
+        <Button
+          onClick={handleSaveAndExit}
+          variant="success"
+          icon="💾"
+          size="lg"
+        >
+          SAVE & APPLY SETTINGS
+        </Button>
+      </div>
+      </div>
+    </>
+  );
+}
+
 // Main Lobby Screen Component
 export function LobbyScreen({ onStartGame, onBack }) {
   const [showGameModes, setShowGameModes] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [audioStarted, setAudioStarted] = useState(false);
 
   // Start lobby music when component mounts
@@ -790,6 +1156,14 @@ export function LobbyScreen({ onStartGame, onBack }) {
 
   const handleBackToLobby = () => {
     setShowGameModes(false);
+  };
+
+  const handleShowSettings = () => {
+    setShowSettings(true);
+  };
+
+  const handleBackFromSettings = () => {
+    setShowSettings(false);
   };
 
   return (
@@ -956,7 +1330,7 @@ export function LobbyScreen({ onStartGame, onBack }) {
           </button>
 
           <button
-            onClick={() => alert('Settings coming soon!')} // Settings placeholder
+            onClick={handleShowSettings}
             style={{
               padding: '12px 24px',
               fontSize: '16px',
@@ -1045,6 +1419,13 @@ export function LobbyScreen({ onStartGame, onBack }) {
         <GameModeSelection 
           onGameModeSelect={handleGameModeSelect}
           onBack={handleBackToLobby}
+        />
+      )}
+
+      {/* Settings Overlay */}
+      {showSettings && (
+        <LobbySettings 
+          onBack={handleBackFromSettings}
         />
       )}
     </div>

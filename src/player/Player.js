@@ -259,6 +259,17 @@ export class Player {
       this.bodyMesh.add(this.tail);
     }
     
+    // Mark the mesh for identification
+    this.bodyMesh.userData.isPlayer = true;
+    this.bodyMesh.userData.playerId = this.playerId;
+    
+    // Mark local player mesh differently
+    if (this.playerId === 'local_player') {
+      this.bodyMesh.userData.isLocalPlayer = true;
+      this.bodyMesh.userData.isPlayer = false; // Don't clean up local player
+      console.log('🐹 Local player mesh marked for protection from cleanup');
+    }
+    
     // Always add the body to scene (third-person view)
     this.scene.add(this.bodyMesh);
     console.log('🐹 Player mesh added to scene for third-person view');

@@ -42,7 +42,7 @@ export class HamsterHavoc extends GameMode {
       red: { score: 0, players: [] },
       blue: { score: 0, players: [] }
     };
-    this.scoreLimit = 50; // First to 50 kills wins
+    this.scoreLimit = 3; // First to 3 kills wins
   }
 
   addPlayer(player) {

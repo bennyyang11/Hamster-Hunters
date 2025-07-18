@@ -73,9 +73,20 @@ function getClassWeapons(selectedClass) {
 }
 
 // Game Scene Component
-function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTeam, onGameExit, isPaused, setIsPaused, mouseSensitivity, onUpdateWeaponStats, onUpdatePlayerPosition, gameStateRef, setGameStats, setIsDead }) {
+function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTeam, onGameExit, isPaused, setIsPaused, mouseSensitivity, onUpdateWeaponStats, onUpdatePlayerPosition, gameStateRef, setGameStats, setIsDead, setTeamScores, setShowVictoryScreen, setWinningTeam, setGameTime }) {
   const { scene, camera, gl } = useThree();
   const playerRef = useRef();
+  
+  // Create refs to store latest state setters to avoid stale closures
+  const stateSettersRef = useRef({});
+  stateSettersRef.current = {
+    setTeamScores,
+    setShowVictoryScreen, 
+    setWinningTeam,
+    setGameStats,
+    setIsDead,
+    setGameTime
+  };
 
   // Apply sensitivity changes to player
   useEffect(() => {
@@ -221,6 +232,11 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             // Add to scene
             scene.add(playerMesh);
             
+            // Mark other player mesh for identification
+            playerMesh.userData.isPlayer = true;
+            playerMesh.userData.isOtherPlayer = true;
+            playerMesh.userData.playerId = playerData.id;
+            
             // Store player data with mesh and collision info
             const otherPlayerData = {
               id: playerData.id,
@@ -235,7 +251,13 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
               character: playerData.character
             };
             
-            otherPlayers.set(playerData.id, otherPlayerData);
+            // Never add local player to other players map
+            if (playerData.id !== 'local_player' && playerData.id !== socket?.id) {
+              otherPlayers.set(playerData.id, otherPlayerData);
+              console.log(`✅ Added other player ${playerData.id} to collision detection`);
+            } else {
+              console.log(`⚠️ Skipped adding local player ${playerData.id} to collision detection`);
+            }
             
             // Update bullet system with new player list
             if (gameStateRef.current.bulletSystem) {
@@ -312,6 +334,59 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           } else {
             console.log(`❌ Cannot remove - other player not found: ${playerId}`);
           }
+        }
+
+        // Clean up all player meshes (for game reset)
+        function cleanupAllPlayerMeshes(scene, otherPlayers) {
+          console.log(`🧹 Cleaning up all player meshes...`);
+          
+          // Clear bullet system collision detection first
+          if (gameStateRef.current.bulletSystem) {
+            gameStateRef.current.bulletSystem.clearAllOtherPlayers();
+          }
+          
+          // Remove all other players
+          const playerIds = Array.from(otherPlayers.keys());
+          playerIds.forEach(playerId => {
+            removeOtherPlayer(playerId, scene, otherPlayers);
+          });
+          
+          // Also scan scene for any orphaned player meshes (but protect local player)
+          const meshesToRemove = [];
+          scene.traverse((child) => {
+            // Look for other player meshes that might be stuck
+            if (child.isMesh && 
+                child.userData?.isOtherPlayer === true &&
+                child.userData?.isLocalPlayer !== true) {
+              meshesToRemove.push(child);
+            }
+          });
+          
+          meshesToRemove.forEach(mesh => {
+            console.log(`🧹 Removing orphaned other player mesh (ID: ${mesh.userData.playerId}) at: (${mesh.position.x.toFixed(1)}, ${mesh.position.y.toFixed(1)}, ${mesh.position.z.toFixed(1)})`);
+            scene.remove(mesh);
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) {
+              if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(material => material.dispose());
+              } else {
+                mesh.material.dispose();
+              }
+            }
+          });
+          
+          console.log(`✅ Scene cleanup completed - removed ${meshesToRemove.length} orphaned other player meshes`);
+          
+          // Debug: Report remaining player meshes
+          let remainingPlayerMeshes = 0;
+          scene.traverse((child) => {
+            if (child.isMesh && 
+                (child.userData?.isPlayer === true || child.userData?.isOtherPlayer === true || child.userData?.isLocalPlayer === true)) {
+              remainingPlayerMeshes++;
+              console.log(`🔍 Remaining player mesh: ID=${child.userData.playerId}, Local=${child.userData.isLocalPlayer}, Other=${child.userData.isOtherPlayer}`);
+            }
+          });
+          console.log(`📊 Total player meshes remaining in scene: ${remainingPlayerMeshes}`);
         }
 
         function createPlayerNameLabel(playerName, team) {
@@ -584,10 +659,12 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           const newHealth = Math.max(0, damageData.newHealth);
           console.log(`💥 Calculated newHealth: ${newHealth}`);
           
-          // Test if setGameStats is a function
-          console.log(`💥 setGameStats type:`, typeof setGameStats);
+          // Use refs to access latest state setters
+          const { setGameStats: currentSetGameStats, setIsDead: currentSetIsDead } = stateSettersRef.current;
           
-          setGameStats(prev => {
+          console.log(`💥 setGameStats type:`, typeof currentSetGameStats);
+          
+          currentSetGameStats(prev => {
             console.log(`💥 Previous gameStats:`, prev);
             const newStats = {
               ...prev,
@@ -606,8 +683,8 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           // Check if player died
           if (newHealth <= 0) {
             console.log(`💥 Player died! Setting isDead to true`);
-            console.log(`💥 setIsDead type:`, typeof setIsDead);
-            setIsDead(true);
+            console.log(`💥 setIsDead type:`, typeof currentSetIsDead);
+            currentSetIsDead(true);
             console.log('💀 Player died - showing death screen');
           }
           
@@ -630,12 +707,15 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         socket.on('respawn', (respawnData) => {
           console.log(`♻️ Respawning at position:`, respawnData.position);
           
+          // Use refs to access latest state setters
+          const { setGameStats: currentSetGameStats, setIsDead: currentSetIsDead } = stateSettersRef.current;
+          
           // Reset health and death state
-          setGameStats(prev => ({
+          currentSetGameStats(prev => ({
             ...prev,
             health: respawnData.health
           }));
-          setIsDead(false);
+          currentSetIsDead(false);
           
           // Update player position and health
           if (gameStateRef.current.player && respawnData.position) {
@@ -659,9 +739,108 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         // Handle player kills notifications
         socket.on('playerKilled', (killData) => {
           console.log(`💀 ${killData.killerName} eliminated ${killData.victimName} with ${killData.weapon}`);
+          console.log(`🎯 Kill data:`, killData); // Debug team info
           
           // Show kill notification in UI
           showKillNotification(killData);
+          
+          // Update team scores for team deathmatch
+          if (selectedGameMode?.id === 'hamster-havoc' && killData.killerTeam && killData.victimTeam && killData.killerTeam !== killData.victimTeam) {
+            console.log(`📊 Updating score for team: ${killData.killerTeam}`);
+            console.log(`📊 Raw kill data teams - killer: ${killData.killerTeam}, victim: ${killData.victimTeam}`);
+            
+            // Map team names to red/blue if needed (for backwards compatibility)
+            const teamMapping = {
+              'wheel-warriors': 'red',
+              'cheek-stuffers': 'blue',
+              'red': 'red',
+              'blue': 'blue'
+            };
+            
+            const normalizedKillerTeam = teamMapping[killData.killerTeam] || killData.killerTeam;
+            const normalizedVictimTeam = teamMapping[killData.victimTeam] || killData.victimTeam;
+            
+            console.log(`📊 Normalized teams - killer: ${normalizedKillerTeam}, victim: ${normalizedVictimTeam}`);
+            
+            // Use refs to access latest state setters
+            const { setTeamScores: currentSetTeamScores, setWinningTeam: currentSetWinningTeam, setShowVictoryScreen: currentSetShowVictoryScreen } = stateSettersRef.current;
+            
+            // Only update if we have a valid team (red or blue)
+            if (['red', 'blue'].includes(normalizedKillerTeam) && ['red', 'blue'].includes(normalizedVictimTeam)) {
+              currentSetTeamScores(prev => {
+                const newScores = {
+                  ...prev,
+                  [normalizedKillerTeam]: (prev[normalizedKillerTeam] || 0) + 1
+                };
+                
+                console.log(`📊 New scores:`, newScores);
+                
+                // Check for win condition
+                if (newScores[normalizedKillerTeam] >= 3) {
+                  console.log(`🏆 ${normalizedKillerTeam.toUpperCase()} TEAM WINS!`);
+                  currentSetWinningTeam(normalizedKillerTeam);
+                  currentSetShowVictoryScreen(true);
+                }
+                
+                return newScores;
+              });
+            } else {
+              console.log(`⚠️ Invalid team names - killer: ${normalizedKillerTeam}, victim: ${normalizedVictimTeam}`);
+            }
+          } else if (selectedGameMode?.id === 'hamster-havoc') {
+            console.log(`⚠️ No team score update - killerTeam: ${killData.killerTeam}, victimTeam: ${killData.victimTeam}`);
+          }
+        });
+
+        // Handle game reset response from server
+        socket.on('gameReset', (resetData) => {
+          console.log('🔄 Game reset received from server:', resetData);
+          
+          // Clean up all player meshes first
+          cleanupAllPlayerMeshes(scene, otherPlayers);
+          
+          // Use refs to access latest state setters
+          const { setGameStats: currentSetGameStats, setIsDead: currentSetIsDead, setTeamScores: currentSetTeamScores, setShowVictoryScreen: currentSetShowVictoryScreen, setWinningTeam: currentSetWinningTeam, setGameTime: currentSetGameTime } = stateSettersRef.current;
+          
+          // Reset all client state
+          currentSetGameStats(prev => ({
+            ...prev,
+            health: 100
+          }));
+          currentSetIsDead(false);
+          currentSetTeamScores({ red: 0, blue: 0 });
+          currentSetShowVictoryScreen(false);
+          currentSetWinningTeam(null);
+          currentSetGameTime(0);
+          
+          // Reset player position if provided
+          if (resetData.position && gameStateRef.current.player) {
+            console.log(`📍 Resetting player position to spawn: (${resetData.position.x.toFixed(1)}, ${resetData.position.y.toFixed(1)}, ${resetData.position.z.toFixed(1)})`);
+            gameStateRef.current.player.position.set(resetData.position.x, resetData.position.y, resetData.position.z);
+            gameStateRef.current.player.health = 100;
+            gameStateRef.current.player.isAlive = true;
+            
+            // Update camera
+            if (gameStateRef.current.player.setupCamera) {
+              gameStateRef.current.player.setupCamera();
+            }
+          }
+          
+          console.log('✅ Game reset completed on client');
+        });
+
+        // Handle game state updates (for synchronized resets)
+        socket.on('gameStateUpdate', (updateData) => {
+          console.log('🔄 Game state update received:', updateData);
+          
+          // Use refs to access latest state setters
+          const { setTeamScores: currentSetTeamScores } = stateSettersRef.current;
+          
+          // Update team scores if provided
+          if (updateData.teamScores) {
+            currentSetTeamScores(updateData.teamScores);
+            console.log('📊 Team scores synchronized:', updateData.teamScores);
+          }
         });
 
         // Send heartbeat every 10 seconds to keep connection active
@@ -1019,6 +1198,361 @@ function ReloadProgressCircle() {
   );
 }
 
+// Team Scoreboard Component for Team Deathmatch
+function TeamScoreboard({ teamScores, gameTime, selectedGameMode }) {
+  // Only show for team deathmatch
+  if (!selectedGameMode || selectedGameMode.id !== 'hamster-havoc') return null;
+
+  // Format time as MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '20px',
+      zIndex: 1000,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      borderRadius: '15px',
+      padding: '15px 25px',
+      border: '2px solid rgba(255, 255, 255, 0.3)',
+      boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)'
+    }}>
+      {/* Red Team */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }}>
+        <div style={{
+          width: '12px',
+          height: '12px',
+          borderRadius: '50%',
+          backgroundColor: '#ff6b6b'
+        }} />
+        <span style={{
+          color: '#ff6b6b',
+          fontSize: '18px',
+          fontWeight: 'bold'
+        }}>
+          RED
+        </span>
+        <span style={{
+          color: 'white',
+          fontSize: '24px',
+          fontWeight: 'bold',
+          minWidth: '30px',
+          textAlign: 'center'
+        }}>
+          {teamScores.red}
+        </span>
+      </div>
+
+      {/* Separator and Timer */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '5px'
+      }}>
+        <div style={{
+          color: 'white',
+          fontSize: '20px',
+          fontWeight: 'bold'
+        }}>
+          VS
+        </div>
+        <div style={{
+          color: '#ffe66d',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          backgroundColor: 'rgba(255, 230, 109, 0.2)',
+          padding: '4px 8px',
+          borderRadius: '8px',
+          border: '1px solid rgba(255, 230, 109, 0.3)'
+        }}>
+          ⏱️ {formatTime(gameTime)}
+        </div>
+      </div>
+
+      {/* Blue Team */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }}>
+        <span style={{
+          color: 'white',
+          fontSize: '24px',
+          fontWeight: 'bold',
+          minWidth: '30px',
+          textAlign: 'center'
+        }}>
+          {teamScores.blue}
+        </span>
+        <span style={{
+          color: '#4ecdc4',
+          fontSize: '18px',
+          fontWeight: 'bold'
+        }}>
+          BLUE
+        </span>
+        <div style={{
+          width: '12px',
+          height: '12px',
+          borderRadius: '50%',
+          backgroundColor: '#4ecdc4'
+        }} />
+      </div>
+
+      {/* Score Limit Indicator */}
+      <div style={{
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: '12px',
+        marginLeft: '10px',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        padding: '4px 8px',
+        borderRadius: '6px'
+      }}>
+        First to 3
+      </div>
+    </div>
+  );
+}
+
+// Victory Screen Component
+function VictoryScreen({ winningTeam, teamScores, gameTime, onPlayAgain, onExitToMenu }) {
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const teamColors = {
+    red: '#ff6b6b',
+    blue: '#4ecdc4'
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      background: 'linear-gradient(135deg, rgba(20, 20, 40, 0.95), rgba(40, 20, 60, 0.95))',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 10000,
+      fontFamily: 'Arial, sans-serif',
+      animation: 'fadeIn 0.5s ease-in'
+    }}>
+      {/* Victory Header */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '40px'
+      }}>
+        <div style={{
+          fontSize: '60px',
+          marginBottom: '20px',
+          animation: 'pulse 2s ease-in-out infinite'
+        }}>
+          🏆
+        </div>
+        <div style={{
+          color: teamColors[winningTeam],
+          fontSize: '48px',
+          fontWeight: 'bold',
+          marginBottom: '15px',
+          textShadow: '3px 3px 6px rgba(0,0,0,0.8)',
+          textTransform: 'uppercase',
+          animation: 'pulse 1.5s ease-in-out infinite'
+        }}>
+          {winningTeam} TEAM WINS!
+        </div>
+        <div style={{
+          color: '#ffe66d',
+          fontSize: '24px',
+          marginBottom: '20px',
+          fontWeight: 'bold'
+        }}>
+          Victory in Team Deathmatch!
+        </div>
+      </div>
+
+      {/* Final Scores */}
+      <div style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        borderRadius: '20px',
+        padding: '30px 40px',
+        marginBottom: '40px',
+        border: '3px solid rgba(255, 255, 255, 0.3)',
+        boxShadow: '0 8px 25px rgba(0, 0, 0, 0.5)'
+      }}>
+        <div style={{
+          color: 'white',
+          fontSize: '20px',
+          fontWeight: 'bold',
+          marginBottom: '20px',
+          textAlign: 'center'
+        }}>
+          FINAL SCORE
+        </div>
+        
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '30px'
+        }}>
+          {/* Red Team Score */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '15px'
+          }}>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              backgroundColor: '#ff6b6b'
+            }} />
+            <span style={{
+              color: '#ff6b6b',
+              fontSize: '24px',
+              fontWeight: 'bold'
+            }}>
+              RED
+            </span>
+            <span style={{
+              color: 'white',
+              fontSize: '36px',
+              fontWeight: 'bold',
+              minWidth: '50px',
+              textAlign: 'center'
+            }}>
+              {teamScores.red}
+            </span>
+          </div>
+
+          <div style={{
+            color: 'white',
+            fontSize: '24px',
+            fontWeight: 'bold'
+          }}>
+            -
+          </div>
+
+          {/* Blue Team Score */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '15px'
+          }}>
+            <span style={{
+              color: 'white',
+              fontSize: '36px',
+              fontWeight: 'bold',
+              minWidth: '50px',
+              textAlign: 'center'
+            }}>
+              {teamScores.blue}
+            </span>
+            <span style={{
+              color: '#4ecdc4',
+              fontSize: '24px',
+              fontWeight: 'bold'
+            }}>
+              BLUE
+            </span>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              backgroundColor: '#4ecdc4'
+            }} />
+          </div>
+        </div>
+
+        <div style={{
+          textAlign: 'center',
+          marginTop: '20px',
+          color: '#ffe66d',
+          fontSize: '18px',
+          fontWeight: 'bold'
+        }}>
+          ⏱️ Match Duration: {formatTime(gameTime)}
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{
+        display: 'flex',
+        gap: '20px',
+        alignItems: 'center'
+      }}>
+        <button
+          onClick={onPlayAgain}
+          style={{
+            background: 'linear-gradient(45deg, #4ecdc4, #44a08d)',
+            color: 'white',
+            border: '3px solid rgba(78, 205, 196, 0.8)',
+            padding: '18px 35px',
+            fontSize: '20px',
+            fontWeight: 'bold',
+            borderRadius: '25px',
+            cursor: 'pointer',
+            boxShadow: '0 6px 20px rgba(78, 205, 196, 0.4)',
+            transition: 'all 0.3s ease',
+            animation: 'pulse 2s ease-in-out infinite'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.transform = 'translateY(-3px) scale(1.05)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.transform = 'translateY(0) scale(1)';
+          }}
+        >
+          🔄 PLAY AGAIN
+        </button>
+
+        <button
+          onClick={onExitToMenu}
+          style={{
+            background: 'linear-gradient(45deg, #95a5a6, #7f8c8d)',
+            color: 'white',
+            border: '2px solid rgba(149, 165, 166, 0.8)',
+            padding: '15px 30px',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            borderRadius: '20px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(149, 165, 166, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.transform = 'translateY(-2px)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.transform = 'translateY(0)';
+          }}
+        >
+          🏠 EXIT TO LOBBY
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function WeaponsUI({ weaponStats, gameStats }) {
   if (!weaponStats) return null;
 
@@ -1170,9 +1704,16 @@ function WeaponsUI({ weaponStats, gameStats }) {
   );
 }
 
-function GameHUD({ gameStats, weaponStats, playerPosition, onSettingsOpen }) {
+function GameHUD({ gameStats, weaponStats, playerPosition, onSettingsOpen, teamScores, gameTime, selectedGameMode }) {
   return (
     <div>
+      {/* Team Scoreboard */}
+      <TeamScoreboard 
+        teamScores={teamScores} 
+        gameTime={gameTime} 
+        selectedGameMode={selectedGameMode} 
+      />
+
       {/* Crosshair with Reload Progress */}
       <div style={{
         position: 'absolute',
@@ -1201,8 +1742,6 @@ function GameHUD({ gameStats, weaponStats, playerPosition, onSettingsOpen }) {
         }} />
       </div>
 
-
-
       {/* Enhanced Weapons UI with Health */}
       <WeaponsUI weaponStats={weaponStats} gameStats={gameStats} />
     </div>
@@ -1227,6 +1766,10 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
   const [musicVolume, setMusicVolume] = useState(0.2);
   const [playerPosition, setPlayerPosition] = useState(null);
   const [isDead, setIsDead] = useState(false);
+  const [teamScores, setTeamScores] = useState({ red: 0, blue: 0 });
+  const [gameTime, setGameTime] = useState(0);
+  const [showVictoryScreen, setShowVictoryScreen] = useState(false);
+  const [winningTeam, setWinningTeam] = useState(null);
 
   // Stop lobby music when game starts and sync volume controls
   useEffect(() => {
@@ -1240,7 +1783,29 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
     
     return () => {
       // Clean up when component unmounts
-      console.log('🧹 GameEngine cleanup');
+      console.log('🧹 GameEngine cleanup - removing player meshes');
+      
+      // Clean up all player meshes when exiting game
+      if (gameStateRef.current.isInitialized) {
+        const scene = gameStateRef.current.player?.scene;
+        if (scene) {
+          // Remove all player meshes including local player when exiting
+          const meshesToRemove = [];
+          scene.traverse((child) => {
+            if (child.isMesh && 
+                (child.userData?.isPlayer === true || child.userData?.isOtherPlayer === true)) {
+              meshesToRemove.push(child);
+            }
+          });
+          
+          meshesToRemove.forEach(mesh => {
+            console.log(`🧹 Cleanup: removing player mesh (ID: ${mesh.userData.playerId})`);
+            scene.remove(mesh);
+          });
+          
+          console.log(`🧹 Removed ${meshesToRemove.length} player meshes during cleanup`);
+        }
+      }
     };
   }, []);
 
@@ -1252,6 +1817,56 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
   useEffect(() => {
     sharedAudioManager.setMusicVolume(musicVolume);
   }, [musicVolume]);
+
+  // Game timer - tracks elapsed time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setGameTime(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Reset game timer when victory screen is closed (for Play Again)
+  useEffect(() => {
+    if (!showVictoryScreen) {
+      setGameTime(0);
+    }
+  }, [showVictoryScreen]);
+
+  // Reset scores and timer when game mode changes
+  useEffect(() => {
+    setTeamScores({ red: 0, blue: 0 });
+    setGameTime(0);
+    setShowVictoryScreen(false);
+    setWinningTeam(null);
+  }, [selectedGameMode]);
+
+  const handlePlayAgain = () => {
+    console.log('🔄 Play Again clicked - requesting game reset');
+    
+    // Reset local state immediately for UI responsiveness
+    setTeamScores({ red: 0, blue: 0 });
+    setGameTime(0);
+    setShowVictoryScreen(false);
+    setWinningTeam(null);
+    setIsDead(false);
+    setGameStats(prev => ({ ...prev, health: 100 }));
+    
+    // Send game reset request to server to reset all players and game state
+    if (gameStateRef.current.player?.socket) {
+      gameStateRef.current.player.socket.emit('gameReset', {
+        gameMode: selectedGameMode?.id || 'hamster-havoc'
+      });
+      console.log('📤 Game reset request sent to server');
+    } else {
+      console.warn('⚠️ Cannot send game reset - no socket connection');
+    }
+  };
+
+  const handleExitToMenu = () => {
+    onGameExit();
+  };
 
   // Game state ref - moved to main component so buttons can access it
   const gameStateRef = useRef({
@@ -1268,10 +1883,6 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
 
   const handleResumeGame = () => {
     setIsPaused(false);
-  };
-
-  const handleExitToMenu = () => {
-    onGameExit();
   };
 
   // Manual respawn function
@@ -1375,6 +1986,10 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
           gameStateRef={gameStateRef}
           setGameStats={setGameStats}
           setIsDead={setIsDead}
+          setTeamScores={setTeamScores}
+          setShowVictoryScreen={setShowVictoryScreen}
+          setWinningTeam={setWinningTeam}
+          setGameTime={setGameTime}
         />
       </Canvas>
       
@@ -1384,6 +1999,9 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
         weaponStats={weaponStats}
         playerPosition={playerPosition}
         onSettingsOpen={() => setShowSettings(true)}
+        teamScores={teamScores}
+        gameTime={gameTime}
+        selectedGameMode={selectedGameMode}
       />
 
       {/* Enhanced Death Screen */}
@@ -1519,6 +2137,17 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
             </button>
           </div>
         </div>
+      )}
+
+      {/* Victory Screen */}
+      {showVictoryScreen && (
+        <VictoryScreen 
+          winningTeam={winningTeam}
+          teamScores={teamScores}
+          gameTime={gameTime}
+          onPlayAgain={handlePlayAgain}
+          onExitToMenu={handleExitToMenu}
+        />
       )}
 
       {/* Pause Screen Overlay */}

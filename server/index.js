@@ -34,6 +34,16 @@ app.use(express.static(path.join(__dirname, '../public')));
 io.on('connection', (socket) => {
   console.log(`🐹 Hamster joined the battle: ${socket.id}`);
 
+  // Auto-balance teams
+  const teamCounts = { red: 0, blue: 0 };
+  players.forEach(player => {
+    if (player.team) {
+      teamCounts[player.team]++;
+    }
+  });
+  
+  const assignedTeam = teamCounts.red <= teamCounts.blue ? 'red' : 'blue';
+  
   // Initialize new player (will be updated when they join with selection)
   const newPlayer = {
     id: socket.id,
@@ -44,11 +54,13 @@ io.on('connection', (socket) => {
     deaths: 0,
     character: 'Hammy Ali', // Will be set by client
     class: 'Tactical Chewer', // Will be set by client
-    team: 'red', // Will be set by client
+    team: assignedTeam, // Auto-balanced team assignment
     gameMode: 'hamster_havoc', // Will be set by client
     isAlive: true,
     lastUpdate: Date.now()
   };
+  
+  console.log(`🎯 Player ${socket.id} assigned to ${assignedTeam} team (Red: ${teamCounts.red}, Blue: ${teamCounts.blue})`);
 
   players.set(socket.id, newPlayer);
 
@@ -56,8 +68,11 @@ io.on('connection', (socket) => {
   socket.emit('gameState', {
     players: Array.from(players.values()),
     gameState: gameState,
-    yourId: socket.id
+    yourId: socket.id,
+    yourTeam: assignedTeam
   });
+  
+  console.log(`📤 Sent initial game state to ${socket.id} - Team: ${assignedTeam}`);
 
   // Notify other players about new player
   socket.broadcast.emit('playerJoined', newPlayer);
@@ -66,13 +81,18 @@ io.on('connection', (socket) => {
   socket.on('playerJoin', (data) => {
     const player = players.get(socket.id);
     if (player) {
+      console.log(`🔄 Player join update - Client sent team: ${data.team}, Server assigned team: ${player.team}`);
+      
       // Update player with selection data
       player.character = data.character;
       player.class = data.character; // Use character as class for now
       player.gameMode = data.gameMode;
-      player.team = data.team;
+      // Keep the server-assigned red/blue team, don't override with client selection
+      // player.team = data.team; // Commented out to maintain red/blue assignment
       player.rotation = data.rotation;
       player.lastUpdate = Date.now();
+      
+      console.log(`✅ Player ${socket.id} updated - Final team: ${player.team}`);
       
       // Set spawn position based on game mode and team
       player.position = getSpawnPosition(player.gameMode, player.team);
@@ -184,6 +204,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle game reset request (from Play Again button)
+  socket.on('gameReset', (data) => {
+    console.log(`🔄 Game reset requested by ${socket.id} for mode: ${data.gameMode}`);
+    resetGameForAllPlayers(data.gameMode);
+  });
+
   // Handle damage
   socket.on('playerDamage', (data) => {
     const targetPlayer = players.get(data.targetId);
@@ -203,7 +229,9 @@ io.on('connection', (socket) => {
           killer: shooterPlayer.id,
           victim: targetPlayer.id,
           killerName: shooterPlayer.character,
-          victimName: targetPlayer.character
+          victimName: targetPlayer.character,
+          killerTeam: shooterPlayer.team,
+          victimTeam: targetPlayer.team
         });
         
         // Don't auto-respawn - let player choose when to respawn
@@ -336,6 +364,8 @@ function checkHit(shooterId, shotData) {
             victim: id,
             killerName: shooter.character,
             victimName: player.character,
+            killerTeam: shooter.team,
+            victimTeam: player.team,
             weapon: shotData.weapon,
             isHeadshot: isHeadshot
           });
@@ -361,15 +391,15 @@ function checkHit(shooterId, shotData) {
 function getSpawnPosition(gameMode, team) {
   if (gameMode === 'hamster_havoc' || gameMode === 'hamster-havoc') {
     // Team-based spawns for team deathmatch - user specified coordinates
-    if (team === 'wheel-warriors') {
-      // The Wheel Warriors spawn point
+    if (team === 'red' || team === 'wheel-warriors') {
+      // Red team / The Wheel Warriors spawn point
       return {
         x: -2105.83,
         y: 40.00,
         z: -3224.46
       };
-    } else if (team === 'cheek-stuffers') {
-      // The Cheek Stuffers spawn point
+    } else if (team === 'blue' || team === 'cheek-stuffers') {
+      // Blue team / The Cheek Stuffers spawn point
       return {
         x: 319.04,
         y: 40.00,
@@ -421,8 +451,13 @@ function respawnPlayer(playerId) {
     
     // Reset position to spawn point
     const gameMode = player.gameMode || 'hamster-havoc';
-    const team = player.team || 'cheek-stuffers';
+    const team = player.team || 'blue'; // Default to blue instead of legacy name
+    
+    console.log(`🔄 Respawning ${player.character} - Game Mode: ${gameMode}, Team: ${team}`);
+    
     player.position = getSpawnPosition(gameMode, team);
+    
+    console.log(`📍 Respawn position calculated: (${player.position.x.toFixed(1)}, ${player.position.y.toFixed(1)}, ${player.position.z.toFixed(1)})`);
     
     // Notify player of respawn
     io.to(playerId).emit('respawn', {
@@ -438,8 +473,69 @@ function respawnPlayer(playerId) {
       health: player.health
     });
     
-    console.log(`♻️ Respawned ${player.character} at (${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)})`);
+    console.log(`♻️ Respawned ${player.character} at (${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)}) - Team: ${team}`);
   }
+}
+
+// Function to reset the entire game for all players (used for Play Again)
+function resetGameForAllPlayers(gameMode) {
+  console.log(`🔄 ========== GAME RESET STARTING ==========`);
+  console.log(`🎮 Game Mode: ${gameMode}`);
+  console.log(`👥 Total players before reset: ${players.size}`);
+  
+  // Re-balance teams first
+  const playerArray = Array.from(players.values());
+  const redPlayers = [];
+  const bluePlayers = [];
+  
+  // Distribute players evenly between teams
+  playerArray.forEach((player, index) => {
+    if (index % 2 === 0) {
+      player.team = 'red';
+      redPlayers.push(player);
+    } else {
+      player.team = 'blue';
+      bluePlayers.push(player);
+    }
+  });
+  
+  console.log(`🔴 Red team: ${redPlayers.length} players`);
+  console.log(`🔵 Blue team: ${bluePlayers.length} players`);
+  
+  // Reset all players
+  players.forEach((player, playerId) => {
+    // Reset player stats
+    player.health = 100;
+    player.isAlive = true;
+    player.kills = 0;
+    player.deaths = 0;
+    
+    // Reset position to correct spawn point
+    const spawnPosition = getSpawnPosition(gameMode, player.team);
+    player.position = spawnPosition;
+    
+    console.log(`🔄 Reset player ${player.character} (${playerId.substring(0, 8)}...) - Team: ${player.team}, Spawn: (${spawnPosition.x.toFixed(1)}, ${spawnPosition.z.toFixed(1)})`);
+    
+    // Send reset data to each player
+    io.to(playerId).emit('gameReset', {
+      position: spawnPosition,
+      health: player.health,
+      team: player.team,
+      gameMode: gameMode,
+      teamScores: { red: 0, blue: 0 }
+    });
+  });
+  
+  // Broadcast updated game state to all players
+  io.emit('gameStateUpdate', {
+    players: Array.from(players.values()),
+    gameMode: gameMode,
+    teamScores: { red: 0, blue: 0 },
+    gameTime: 0
+  });
+  
+  console.log(`✅ Game reset completed for ${players.size} players`);
+  console.log(`🔄 ========== GAME RESET FINISHED ==========`);
 }
 
 // Game loop for cleanup and updates
