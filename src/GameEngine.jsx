@@ -820,6 +820,9 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             gameStateRef.current.player.health = 100;
             gameStateRef.current.player.isAlive = true;
             
+            // Refresh collision system after reset
+            gameStateRef.current.player.refreshCollisions();
+            
             // Update camera
             if (gameStateRef.current.player.setupCamera) {
               gameStateRef.current.player.setupCamera();
@@ -983,6 +986,9 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             
             scene.add(nuketown);
             console.log('🗺️ Call of Duty Nuketown map added to scene');
+            
+            // Collision system disabled - no initialization needed
+            console.log('🚧 Collision system disabled - movement should work normally');
           }
           
           // Load all weapon models using AssetLoader's preload system

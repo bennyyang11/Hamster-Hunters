@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { HAMSTER_CHARACTERS, getCharacterMeshColor, calculateFinalStats, getRandomCharacter, getRandomClass } from './HamsterCharacters.js';
 import { WeaponManager, getWeaponForClass } from '../weapons/WeaponSystem.js';
 import { NetworkOptimizer, MovementPredictor } from '../utils/NetworkOptimizer.js';
+import { SimpleCollisionSystem } from '../utils/SimpleCollisionSystem.js';
 
 export class Player {
   constructor(id, character, combatClass, position, scene, assetLoader = null, camera = null) {
@@ -72,6 +73,10 @@ export class Player {
     // Network optimization
     this.networkOptimizer = new NetworkOptimizer();
     this.movementPredictor = new MovementPredictor();
+    
+    // Collision system disabled for debugging
+    this.simpleCollisionSystem = null;
+    console.log('🚧 Collision system disabled - normal movement restored');
     
     // Create weapon manager with AssetLoader and camera
     this.weaponManager = new WeaponManager(this.scene, this.assetLoader, this.camera);
@@ -464,6 +469,16 @@ export class Player {
       this.lastToggleTime = now;
       console.log(`📷 Camera view toggled: ${this.isFrontView ? 'FRONT THIRD-PERSON' : 'BACK THIRD-PERSON'}`);
     }
+    
+    // Collision debug (C key) - collision system disabled
+    if (this.inputManager.isKeyPressed('KeyC') && (now - this.lastToggleTime) > 500) {
+      console.log('🔍 === MOVEMENT DEBUG ===');
+      console.log('🚧 Collision system: DISABLED');
+      console.log(`📍 Player position: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
+      console.log('🎮 Movement should work normally');
+      console.log('🔍 === END DEBUG ===');
+      this.lastToggleTime = now;
+    }
 
     // Weapon switching (1 and 2 keys)
     if (this.inputManager.isPrimaryWeaponPressed()) {
@@ -493,24 +508,41 @@ export class Player {
     // Apply gravity (downward force)
     this.velocity.y -= this.gravity * deltaTime;
     
-    // Apply velocity to position
-    this.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+    // Calculate new position based on velocity
+    const newPosition = this.position.clone().add(this.velocity.clone().multiplyScalar(deltaTime));
+    
+    // Hard floor safety - never allow falling below a critical level
+    const hardFloorLevel = -100; // Emergency floor to prevent infinite falling
+    if (newPosition.y < hardFloorLevel) {
+      console.log('🚨 EMERGENCY: Player hit hard floor, teleporting to safe level');
+      newPosition.y = 40; // Reset to safe spawn level
+      this.velocity.y = 0;
+    }
+    
+    // COLLISION SYSTEM TEMPORARILY DISABLED - Just apply normal movement
+    this.position.copy(newPosition);
+    
+    // Simple, reliable ground collision (always apply regardless of collision system)
+    const safeGroundLevel = 40;
+    if (this.position.y < safeGroundLevel) {
+      this.position.y = safeGroundLevel;
+      this.velocity.y = 0;
+      this.isOnGround = true;
+      this.isJumping = false;
+    } else if (this.position.y <= safeGroundLevel + 1) {
+      // Close to ground - consider on ground
+      this.isOnGround = true;
+      if (this.velocity.y < 0) {
+        this.velocity.y = 0;
+      }
+    } else {
+      // Clearly in the air
+      this.isOnGround = false;
+    }
     
     // Update body mesh position to match player position
     if (this.bodyMesh) {
       this.bodyMesh.position.copy(this.position);
-    }
-    
-    // No artificial boundaries - let the hamster explore the entire map freely!
-    // (In a real game, collision detection with map geometry would handle boundaries)
-    
-    // Ground collision (adjusted for large hamster)
-    const groundLevel = 40; // Higher ground level for large hamster
-    if (this.position.y < groundLevel) {
-      this.position.y = groundLevel;
-      this.velocity.y = 0;
-      this.isOnGround = true;
-      this.isJumping = false;
     }
   }
 
@@ -684,11 +716,32 @@ export class Player {
       this.rotation.copy(interpolatedState.rotation);
     }
     
-    // Clean up old prediction states periodically
-    if (Math.random() < 0.01) { // 1% chance per update
-      this.movementPredictor.cleanup();
-    }
+      // Clean up old prediction states periodically
+  if (Math.random() < 0.01) { // 1% chance per update
+    this.movementPredictor.cleanup();
   }
+}
+
+// Initialize simple collision system after map is loaded
+initializeCollisions() {
+  if (this.simpleCollisionSystem && this.playerId === 'local_player') {
+    console.log('🚧 Initializing simple wall collision system...');
+    console.log(`📍 Player current position: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
+    
+    this.simpleCollisionSystem.initializeWallObjects();
+    
+    // Debug visualization
+    this.simpleCollisionSystem.debugVisualization();
+  }
+}
+
+// Refresh collision system (call when map changes)
+refreshCollisions() {
+  if (this.simpleCollisionSystem && this.playerId === 'local_player') {
+    console.log('🔄 Refreshing simple collision system...');
+    this.simpleCollisionSystem.refresh();
+  }
+}
 
   // Remove player from scene
   destroy() {

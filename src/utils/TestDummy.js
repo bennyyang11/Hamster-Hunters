@@ -72,6 +72,12 @@ export class TestDummy {
           console.log(`📦 Model center: (${modelCenter.x.toFixed(1)}, ${modelCenter.y.toFixed(1)}, ${modelCenter.z.toFixed(1)})`);
           console.log(`📦 Hitbox positioned at: (${hitboxCenter.x.toFixed(1)}, ${hitboxCenter.y.toFixed(1)}, ${hitboxCenter.z.toFixed(1)})`);
         
+        // Mark as non-collidable for collision system
+        this.mesh.userData.isTestDummy = true;
+        this.mesh.userData.skipCollision = true;
+        this.hitbox.userData.isTestDummy = true;
+        this.hitbox.userData.skipCollision = true;
+        
         // Add to scene
         this.scene.add(this.mesh);
         this.scene.add(this.hitbox);
@@ -122,6 +128,12 @@ export class TestDummy {
     
     console.log(`📦 Created precise fallback hitbox: ${hitboxRadius.toFixed(1)} unit radius sphere`);
     console.log(`📦 Fallback hitbox positioned at: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
+    
+    // Mark as non-collidable for collision system
+    this.mesh.userData.isTestDummy = true;
+    this.mesh.userData.skipCollision = true;
+    this.hitbox.userData.isTestDummy = true;
+    this.hitbox.userData.skipCollision = true;
     
     this.scene.add(this.mesh);
     this.scene.add(this.hitbox);
