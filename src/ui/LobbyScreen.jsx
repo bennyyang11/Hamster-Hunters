@@ -237,24 +237,33 @@ function GameModeSelection({ onGameModeSelect, onBack }) {
     {
       id: 'last-ham-standing',
       name: 'Last Ham Standing', 
-      subtitle: 'Elimination',
+      subtitle: 'Coming Soon',
       description: 'Battle royale style elimination. Be the last hamster standing!',
-      icon: '👑',
-      color: '#4ecdc4',
-      players: '1v7'
+      icon: '🚧',
+      color: '#888888',
+      players: '1v7',
+      comingSoon: true
     },
     {
       id: 'nuts-of-fury',
       name: 'Nuts of Fury',
-      subtitle: 'Gun Game',
+      subtitle: 'Coming Soon',
       description: 'Progress through weapons with each kill. First to finish wins!',
-      icon: '🏆',
-      color: '#ffe66d',
-      players: '1v7'
+      icon: '🚧',
+      color: '#888888',
+      players: '1v7',
+      comingSoon: true
     }
   ];
 
   const handleGameModeSelect = (gameModeId) => {
+    const mode = gameModes.find(m => m.id === gameModeId);
+    
+    if (mode?.comingSoon) {
+      alert('🚧 Coming Soon!\n\nThis game mode is currently under development and will be available in a future update. Stay tuned!');
+      return;
+    }
+    
     setSelectedGameMode(gameModeId);
   };
 
@@ -310,16 +319,19 @@ function GameModeSelection({ onGameModeSelect, onBack }) {
             selected={selectedGameMode === mode.id}
             hovered={hoveredGameMode === mode.id}
             onClick={() => handleGameModeSelect(mode.id)}
-            onMouseEnter={() => setHoveredGameMode(mode.id)}
-            onMouseLeave={() => setHoveredGameMode(null)}
+            onMouseEnter={() => !mode.comingSoon && setHoveredGameMode(mode.id)}
+            onMouseLeave={() => !mode.comingSoon && setHoveredGameMode(null)}
             backgroundColor={`linear-gradient(135deg, ${mode.color}20, ${mode.color}40)`}
             borderColor={selectedGameMode === mode.id ? mode.color : `${mode.color}80`}
             style={{
               minHeight: '280px',
               textAlign: 'center',
-              cursor: 'pointer',
+              cursor: mode.comingSoon ? 'not-allowed' : 'pointer',
               borderWidth: selectedGameMode === mode.id ? '3px' : '2px',
-              boxShadow: selectedGameMode === mode.id 
+              opacity: mode.comingSoon ? 0.6 : 1,
+              boxShadow: mode.comingSoon 
+                ? SHADOWS.sm
+                : selectedGameMode === mode.id 
                 ? `0 12px 35px ${mode.color}50, ${SHADOWS.xl}`
                 : hoveredGameMode === mode.id 
                 ? `0 10px 30px ${mode.color}30, ${SHADOWS.lg}`

@@ -44,9 +44,10 @@ import { sharedAudioManager } from './utils/SharedAudioManager.js';
 import { WeaponManager } from './weapons/WeaponSystem.js';
 import { BulletSystem } from './utils/BulletSystem.js';
 import { InputManager } from './utils/InputManager.js';
-import { TestDummy } from './utils/TestDummy.js';
+// TestDummy import removed - no longer needed for testing
 import { HamsterHavoc } from './gamemodes/GameMode.js';
 import { RenderOptimizer } from './utils/RenderOptimizer.js';
+import { KDAScoreboard } from './ui/components/KDAScoreboard.jsx';
 
 // Get class weapons data
 function getClassWeapons(selectedClass) {
@@ -73,7 +74,7 @@ function getClassWeapons(selectedClass) {
 }
 
 // Game Scene Component
-function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTeam, onGameExit, isPaused, setIsPaused, mouseSensitivity, onUpdateWeaponStats, onUpdatePlayerPosition, gameStateRef, setGameStats, setIsDead, setTeamScores, setShowVictoryScreen, setWinningTeam, setGameTime }) {
+function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTeam, onGameExit, isPaused, setIsPaused, mouseSensitivity, onUpdateWeaponStats, onUpdatePlayerPosition, gameStateRef, setGameStats, setIsDead, setTeamScores, setShowVictoryScreen, setWinningTeam, setGameTime, showScoreboard, setShowScoreboard, playerStats, setPlayerStats }) {
   const { scene, camera, gl } = useThree();
   const playerRef = useRef();
   
@@ -85,7 +86,11 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
     setWinningTeam,
     setGameStats,
     setIsDead,
-    setGameTime
+    setGameTime,
+    showScoreboard,
+    setShowScoreboard,
+    playerStats,
+    setPlayerStats
   };
 
   // Apply sensitivity changes to player
@@ -259,6 +264,8 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
               console.log(`⚠️ Skipped adding local player ${playerData.id} to collision detection`);
             }
             
+            // Initialize player stats if not already present - handled by caller
+            
             // Update bullet system with new player list
             if (gameStateRef.current.bulletSystem) {
               gameStateRef.current.bulletSystem.setOtherPlayers(otherPlayers);
@@ -323,6 +330,8 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             
             // Remove from players map
             otherPlayers.delete(playerId);
+            
+            // Remove from player stats - handled by caller
             
             // Update bullet system
             if (gameStateRef.current.bulletSystem) {
@@ -522,6 +531,26 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             console.log(`📍 Other player position:`, playerData.position);
             console.log(`🏷️ Other player team:`, playerData.team);
             createOtherPlayer(playerData, scene, assetLoader, otherPlayers);
+            
+            // Initialize player stats
+            const { setPlayerStats: currentSetPlayerStats } = stateSettersRef.current;
+            if (currentSetPlayerStats) {
+              currentSetPlayerStats(prevStats => {
+                const newStats = new Map(prevStats);
+                if (!newStats.has(playerData.id)) {
+                  newStats.set(playerData.id, {
+                    id: playerData.id,
+                    name: playerData.character || `Player_${playerData.id}`,
+                    team: playerData.team || 'red',
+                    kills: 0,
+                    deaths: 0,
+                    assists: 0,
+                    isLocalPlayer: false
+                  });
+                }
+                return newStats;
+              });
+            }
           } else {
             console.log(`👤 Ignoring own join event: ${playerData.id}`);
           }
@@ -595,6 +624,16 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         socket.on('playerLeft', (playerId) => {
           console.log(`👥 PLAYER LEFT: ${playerId}`);
           removeOtherPlayer(playerId, scene, otherPlayers);
+          
+          // Remove from player stats
+          const { setPlayerStats: currentSetPlayerStats } = stateSettersRef.current;
+          if (currentSetPlayerStats) {
+            currentSetPlayerStats(prevStats => {
+              const newStats = new Map(prevStats);
+              newStats.delete(playerId);
+              return newStats;
+            });
+          }
         });
 
         // Listen for initial game state with existing players
@@ -610,6 +649,26 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
               if (playerData.id !== socket.id) {
                 console.log(`👥 CREATING EXISTING PLAYER: ${playerData.id}`, playerData);
                 createOtherPlayer(playerData, scene, assetLoader, otherPlayers);
+                
+                // Initialize player stats for existing players
+                const { setPlayerStats: currentSetPlayerStats } = stateSettersRef.current;
+                if (currentSetPlayerStats) {
+                  currentSetPlayerStats(prevStats => {
+                    const newStats = new Map(prevStats);
+                    if (!newStats.has(playerData.id)) {
+                      newStats.set(playerData.id, {
+                        id: playerData.id,
+                        name: playerData.character || `Player_${playerData.id}`,
+                        team: playerData.team || 'red',
+                        kills: 0,
+                        deaths: 0,
+                        assists: 0,
+                        isLocalPlayer: false
+                      });
+                    }
+                    return newStats;
+                  });
+                }
               } else {
                 console.log(`👤 Skipping own player: ${playerData.id}`);
               }
@@ -623,6 +682,29 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         socket.on('connect', () => {
           console.log(`🌐 ✅ Socket connected with ID: ${socket.id}`);
           console.log(`👥 Multiplayer system ready - listening for other players...`);
+          
+          // Initialize local player stats with actual socket.id
+          const { setPlayerStats: currentSetPlayerStats } = stateSettersRef.current;
+          if (currentSetPlayerStats) {
+            currentSetPlayerStats(prevStats => {
+              const newStats = new Map(prevStats);
+              const teamId = selectedTeam?.id || 'red';
+              
+              // Use socket.id as the player ID (same as server uses)
+              newStats.set(socket.id, {
+                id: socket.id,
+                name: selectedClass?.name || 'Hamster',
+                team: teamId,
+                kills: 0,
+                deaths: 0,
+                assists: 0,
+                isLocalPlayer: true
+              });
+              
+              console.log(`📊 Initialized local player stats with ID: ${socket.id}`);
+              return newStats;
+            });
+          }
         });
         
         socket.on('disconnect', () => {
@@ -741,6 +823,40 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           console.log(`💀 ${killData.killerName} eliminated ${killData.victimName} with ${killData.weapon}`);
           console.log(`🎯 Kill data:`, killData); // Debug team info
           
+          // Update player statistics using refs - only for existing players
+          const { setPlayerStats: currentSetPlayerStats } = stateSettersRef.current;
+          if (currentSetPlayerStats) {
+            currentSetPlayerStats(prevStats => {
+              const newStats = new Map(prevStats);
+              
+              console.log(`🔍 Kill event - Killer: ${killData.killer}, Victim: ${killData.victim}`);
+              console.log(`🔍 Current players in stats:`, Array.from(newStats.keys()));
+              console.log(`🔍 Killer isLocalPlayer check: ${killData.killer === socket.id}`);
+              
+              // Only update killer stats if killer exists in our stats
+              const killerStats = newStats.get(killData.killer);
+              if (killerStats) {
+                killerStats.kills++;
+                newStats.set(killData.killer, killerStats);
+                console.log(`✅ Updated killer ${killData.killerName} kills: ${killerStats.kills}`);
+              } else {
+                console.log(`⚠️ Killer ${killData.killer} not found in player stats - skipping`);
+              }
+              
+              // Only update victim stats if victim exists in our stats
+              const victimStats = newStats.get(killData.victim);
+              if (victimStats) {
+                victimStats.deaths++;
+                newStats.set(killData.victim, victimStats);
+                console.log(`✅ Updated victim ${killData.victimName} deaths: ${victimStats.deaths}`);
+              } else {
+                console.log(`⚠️ Victim ${killData.victim} not found in player stats - skipping`);
+              }
+              
+              return newStats;
+            });
+          }
+          
           // Show kill notification in UI
           showKillNotification(killData);
           
@@ -812,6 +928,23 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           currentSetShowVictoryScreen(false);
           currentSetWinningTeam(null);
           currentSetGameTime(0);
+          
+          // Reset all player stats to 0/0/0
+          const { setPlayerStats: currentSetPlayerStats } = stateSettersRef.current;
+          if (currentSetPlayerStats) {
+            currentSetPlayerStats(prevStats => {
+              const newStats = new Map();
+              prevStats.forEach((player, playerId) => {
+                newStats.set(playerId, {
+                  ...player,
+                  kills: 0,
+                  deaths: 0,
+                  assists: 0
+                });
+              });
+              return newStats;
+            });
+          }
           
           // Reset player position if provided
           if (resetData.position && gameStateRef.current.player) {
@@ -938,20 +1071,9 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
       weaponManager.setHamsterReference(player);
       player.weaponManager = weaponManager;
       
-      // Equip the primary weapon since we just replaced the weapon manager
-      player.switchToWeapon('primary');
-      console.log(`🔫 Player weapons set up based on class: "${playerClass}"`);
+      console.log(`🔫 Player weapon manager set up based on class: "${playerClass}"`);
 
-      // Create test dummy for team deathmatch mode
-      let testDummy = null;
-      if (selectedGameMode && selectedGameMode.id === 'hamster-havoc') {
-        console.log('🎯 Creating test dummy for team deathmatch...');
-        testDummy = new TestDummy(scene, assetLoader, new THREE.Vector3(0, 40, 0));
-        
-        // Connect test dummy to bullet system for hit detection
-        bulletSystem.testDummy = testDummy;
-        console.log('🎯 Test dummy added to team deathmatch mode');
-      }
+      // Test dummy removed - no longer needed for testing
 
       // Store references
       gameStateRef.current = {
@@ -962,10 +1084,12 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         bulletSystem,
         inputManager,
         gameMode,
-        testDummy,
         renderOptimizer,
         isInitialized: true
       };
+
+      // Initialize local player stats - wait for socket connection
+      // This will be done after socket connects to get the real socket.id
 
       // Initialize audio
       audioManager.initialize();
@@ -1006,6 +1130,12 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
           if (gameStateRef.current?.player?.weaponManager) {
             gameStateRef.current.player.weaponManager.refreshWeaponWithLoadedAssets();
           }
+          
+          // Now equip the primary weapon after assets are loaded
+          if (gameStateRef.current?.player) {
+            gameStateRef.current.player.switchToWeapon('primary');
+            console.log(`🔫 Primary weapon equipped after asset loading`);
+          }
         } catch (error) {
           console.error('❌ Error loading game assets:', error);
         }
@@ -1024,9 +1154,7 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
         if (gameStateRef.current.inputManager) {
           gameStateRef.current.inputManager.dispose();
         }
-        if (gameStateRef.current.testDummy) {
-          gameStateRef.current.testDummy.destroy();
-        }
+            // Test dummy cleanup removed - no longer needed
         cleanup(); // Remove canvas event listener
         console.log('🧹 Game cleanup completed');
       };
@@ -1035,28 +1163,55 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
     initializeGame();
       }, [scene, camera, gl, selectedWeapon, selectedClass, isPaused]); // Added selectedClass to dependency array
 
-  // Optimized game loop with throttled updates
+  // Optimized game loop with throttled updates and frame rate limiting
   let lastUIUpdate = 0;
+  let lastFrameTime = 0;
+  const targetFrameTime = 1000 / 120; // Target 120 FPS max for better performance
+  
   useFrame((state, delta) => {
     const gameState = gameStateRef.current;
     if (!gameState.isInitialized || isPaused) return; // Skip updates when paused
+    
+    // Frame rate limiting for consistent performance
+    const currentTime = performance.now();
+    if (currentTime - lastFrameTime < targetFrameTime) return;
+    lastFrameTime = currentTime;
 
     // Update player (high priority - every frame)
     if (gameState.player) {
       gameState.player.update(delta);
       
-      // Fallback collision initialization check (only for local player)
+      // Check for scoreboard input (Tab key) - every frame for responsiveness
+      if (gameState.inputManager && !isPaused) {
+        // Use refs to access latest state to avoid stale closures
+        const { showScoreboard: currentShowScoreboard, setShowScoreboard: currentSetShowScoreboard } = stateSettersRef.current;
+        if (currentShowScoreboard !== undefined && currentSetShowScoreboard) {
+          const isTabPressed = gameState.inputManager.isScoreboardPressed();
+          if (isTabPressed !== currentShowScoreboard) {
+            currentSetShowScoreboard(isTabPressed);
+          }
+        }
+      } else {
+        // Hide scoreboard when paused
+        const { showScoreboard: currentShowScoreboard, setShowScoreboard: currentSetShowScoreboard } = stateSettersRef.current;
+        if (currentShowScoreboard && currentSetShowScoreboard) {
+          currentSetShowScoreboard(false);
+        }
+      }
+      
+      // Fallback collision initialization check (only for local player) - throttled for performance
       if (gameState.player.playerId === 'local_player' && 
           gameState.player.simpleCollisionSystem && 
-          !gameState.player.simpleCollisionSystem.isInitialized) {
+          !gameState.player.simpleCollisionSystem.isInitialized &&
+          Math.random() < 0.1) { // Only check 10% of frames to reduce overhead
         gameState.player.initializeCollisions();
       }
     }
     
-    // Throttle UI updates to reduce computational overhead (30 FPS instead of 60)
-    const now = performance.now();
-    if (now - lastUIUpdate > 33) { // ~30 FPS for UI updates
-      lastUIUpdate = now;
+    // Throttle UI updates to reduce computational overhead (20 FPS instead of 60)
+    // Use currentTime variable for UI throttling as well
+    if (currentTime - lastUIUpdate > 50) { // ~20 FPS for UI updates - better performance
+      lastUIUpdate = currentTime;
       
       // Update weapon stats for UI (throttled)
       if (onUpdateWeaponStats && gameState.player?.weaponManager) {
@@ -1789,6 +1944,10 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
   const [gameTime, setGameTime] = useState(0);
   const [showVictoryScreen, setShowVictoryScreen] = useState(false);
   const [winningTeam, setWinningTeam] = useState(null);
+  const [showScoreboard, setShowScoreboard] = useState(false);
+  const [playerStats, setPlayerStats] = useState(new Map()); // Track all player KDA stats
+
+
 
   // Stop lobby music when game starts and sync volume controls
   useEffect(() => {
@@ -1896,7 +2055,6 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
     bulletSystem: null,
     inputManager: null,
     gameMode: null,
-    testDummy: null,
     isInitialized: false
   });
 
@@ -2009,6 +2167,10 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
           setShowVictoryScreen={setShowVictoryScreen}
           setWinningTeam={setWinningTeam}
           setGameTime={setGameTime}
+          showScoreboard={showScoreboard}
+          setShowScoreboard={setShowScoreboard}
+          playerStats={playerStats}
+          setPlayerStats={setPlayerStats}
         />
       </Canvas>
       
@@ -2022,6 +2184,18 @@ export function GameEngine({ selectedWeapon, selectedClass, selectedGameMode, se
         gameTime={gameTime}
         selectedGameMode={selectedGameMode}
       />
+
+      {/* KDA Scoreboard - Hold Tab to view */}
+      {showScoreboard && !isDead && !isPaused && (
+        <KDAScoreboard 
+          gameStats={gameStats}
+          playerPosition={playerPosition}
+          teamScores={teamScores}
+          gameTime={gameTime}
+          selectedGameMode={selectedGameMode}
+          playerStats={playerStats}
+        />
+      )}
 
       {/* Enhanced Death Screen */}
       {isDead && (

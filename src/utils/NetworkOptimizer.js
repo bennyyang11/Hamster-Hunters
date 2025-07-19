@@ -11,7 +11,7 @@ export class NetworkOptimizer {
     // Optimization settings
     this.positionThreshold = 0.1; // Minimum movement before sending update
     this.rotationThreshold = 0.05; // Minimum rotation before sending update
-    this.maxUpdateRate = 100; // Max update rate in ms (10 FPS instead of 20)
+    this.maxUpdateRate = 150; // Max update rate in ms (~7 FPS for better performance)
     this.lastUpdateTime = 0;
     
     // Compression settings

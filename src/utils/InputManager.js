@@ -16,7 +16,7 @@ export class InputManager {
       this.keys[e.code] = true;
       
       // Prevent default for game keys
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyR', 'ShiftLeft', 'KeyT', 'Digit1', 'Digit2'].includes(e.code)) {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyR', 'ShiftLeft', 'KeyT', 'Digit1', 'Digit2', 'Tab'].includes(e.code)) {
         e.preventDefault();
       }
     });
@@ -111,10 +111,10 @@ export class InputManager {
     if (this.isKeyPressed('KeyA')) movement.x -= 1;
     if (this.isKeyPressed('KeyD')) movement.x += 1;
     
-    // Only log when there's actual movement
-    if (movement.x !== 0 || movement.z !== 0) {
-      console.log(`🎮 Movement: x=${movement.x}, z=${movement.z}`);
-    }
+    // Movement logging disabled for performance optimization
+    // if (movement.x !== 0 || movement.z !== 0) {
+    //   console.log(`🎮 Movement: x=${movement.x}, z=${movement.z}`);
+    // }
     
     // Normalize diagonal movement
     const length = Math.sqrt(movement.x * movement.x + movement.z * movement.z);
@@ -149,6 +149,11 @@ export class InputManager {
   // Check for crouch input
   isCrouchPressed() {
     return this.isKeyPressed('KeyC');
+  }
+
+  // Check for scoreboard input (Tab key)
+  isScoreboardPressed() {
+    return this.isKeyPressed('Tab');
   }
 
   // Check for third-person toggle input

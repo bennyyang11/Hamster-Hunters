@@ -449,7 +449,8 @@ export class Player {
       this.velocity.y = this.jumpHeight;
       this.isJumping = true;
       this.isOnGround = false;
-      console.log(`🦘 Hamster jumping! Initial velocity: ${this.jumpHeight}, Current Y: ${this.position.y.toFixed(1)}`);
+      // Removed jump logging for better performance
+      // console.log(`🦘 Hamster jumping! Initial velocity: ${this.jumpHeight}, Current Y: ${this.position.y.toFixed(1)}`);
     }
     
     // Shooting
@@ -682,8 +683,8 @@ export class Player {
       // Update optimizer tracking
       this.networkOptimizer.updateSentData(this.position, this.cameraRotation);
       
-      // Log movement updates less frequently to avoid console spam
-      if (Math.random() < 0.05) { // 5% of updates (reduced from 10%)
+      // Log movement updates very rarely to improve performance
+      if (Math.random() < 0.01) { // 1% of updates for better performance
         console.log(`🌐 Optimized movement update: (${this.position.x.toFixed(1)}, ${this.position.y.toFixed(1)}, ${this.position.z.toFixed(1)})`);
       }
     }

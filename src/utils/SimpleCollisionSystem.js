@@ -24,8 +24,8 @@ export class SimpleCollisionSystem {
         if (this.isWallObject(child)) {
           this.wallObjects.push(child);
           
-          // Log first several objects for debugging
-          if (this.wallObjects.length <= 20) { // Show more objects to see fence detection
+          // Log only first few objects for debugging (performance optimization)
+          if (this.wallObjects.length <= 5) { 
             const bbox = new THREE.Box3().setFromObject(child);
             const size = bbox.getSize(new THREE.Vector3());
             const meshName = (child.name || '').toLowerCase();
@@ -98,7 +98,6 @@ export class SimpleCollisionSystem {
     )) {
       // For named fence objects, be extremely permissive about size
       if (size.y > 3 && (size.x > 5 || size.z > 5)) {
-        console.log(`🚧 Fence detected by name: "${mesh.name || 'unnamed'}" - Size: ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}`);
         return true;
       }
     }
@@ -161,7 +160,6 @@ export class SimpleCollisionSystem {
     
     if (isLongX || isLongZ || isMediumFenceX || isMediumFenceZ || isSmallFenceX || isSmallFenceZ || 
         isTallPost || isMediumPost || isSmallPost || isTinyPost || isNarrowTallObject) {
-      console.log(`🚧 Fence detected by dimensions: "${mesh.name || 'unnamed'}" - Size: ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}`);
       return true;
     }
     
@@ -173,7 +171,6 @@ export class SimpleCollisionSystem {
       const isTallRelativeToWidth = size.y > Math.max(size.x, size.z) * 1.5; // Taller than it is wide
       
       if (isNarrowBarrier || isVeryNarrow || isTallRelativeToWidth) {
-        console.log(`🚧 Barrier/Post detected (catch-all): "${mesh.name || 'unnamed'}" - Size: ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}`);
         return true;
       }
     }
@@ -213,13 +210,10 @@ export class SimpleCollisionSystem {
     // Normalize movement direction
     const movementDirection = movement.normalize();
     
-    // Create rays around the player for collision detection (simplified for better performance)
+    // Create minimal rays for collision detection (optimized for performance)
     const rayOrigins = [
-      // Center ray (most important)
-      new THREE.Vector3(horizontalCurrent.x, horizontalCurrent.y, horizontalCurrent.z),
-      // Side rays only
-      new THREE.Vector3(horizontalCurrent.x - this.playerRadius * 0.3, horizontalCurrent.y, horizontalCurrent.z),
-      new THREE.Vector3(horizontalCurrent.x + this.playerRadius * 0.3, horizontalCurrent.y, horizontalCurrent.z)
+      // Center ray only for best performance
+      new THREE.Vector3(horizontalCurrent.x, horizontalCurrent.y, horizontalCurrent.z)
     ];
 
     // Check each ray for wall collisions
@@ -251,8 +245,8 @@ export class SimpleCollisionSystem {
     
     // Only block movement if ALL rays are blocked (very conservative)
     if (blockedRays >= rayOrigins.length && closestCollisionDistance < this.playerRadius) {
-      // Log collision for debugging (only occasionally to avoid spam)
-      if (Math.random() < 0.2) { // 20% chance to log
+      // Log collision for debugging (very rarely to avoid performance impact)
+      if (Math.random() < 0.02) { // 2% chance to log for performance
         console.log(`🚧 Movement blocked by: "${closestCollisionObject?.name || 'unnamed'}" at distance ${closestCollisionDistance.toFixed(1)}`);
       }
       

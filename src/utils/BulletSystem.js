@@ -177,30 +177,13 @@ export class BulletSystem {
   }
 
   checkBulletCollision(bullet) {
-    // Check test dummy collision first (if it exists) - BEFORE ground collision
-    if (this.testDummy && this.testDummy.isActive) {
-      if (this.testDummy.checkBulletHit(bullet.mesh.position, bullet.direction, 5, this.bulletSpeed)) {
-        console.log('🎯 💥 BULLET HIT CLOSE TEST DUMMY! Removing bullet.');
-        return true; // Bullet hit dummy, remove bullet
-      }
-    }
-    
-    // Check far test dummy collision too
-    if (this.farTestDummy && this.farTestDummy.isActive) {
-      if (this.farTestDummy.checkBulletHit(bullet.mesh.position, bullet.direction, 5, this.bulletSpeed)) {
-        console.log('🎯 💥 BULLET HIT FAR TEST DUMMY! Long-distance shot successful!');
-        return true; // Bullet hit far dummy, remove bullet
-      }
-    }
-    
     // Very lenient ground collision - only stop bullets if they go way below ground
     if (bullet.mesh.position.y <= -50) { // Much lower ground level - bullets can fly over terrain
       console.log(`💥 Bullet hit ground at Y=${bullet.mesh.position.y.toFixed(1)}`);
       return true;
     }
     
-    // Could add more sophisticated collision detection here
-    // For now, just check if bullet hits the ground or test dummy
+    // Could add more sophisticated collision detection here (player vs player, etc.)
     return false;
   }
 
