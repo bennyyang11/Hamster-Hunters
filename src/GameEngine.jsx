@@ -987,8 +987,14 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
             scene.add(nuketown);
             console.log('🗺️ Call of Duty Nuketown map added to scene');
             
-            // Collision system disabled - no initialization needed
-            console.log('🚧 Collision system disabled - movement should work normally');
+            // Initialize collision system after map is loaded
+            if (gameStateRef.current.player && gameStateRef.current.player.initializeCollisions) {
+              // Give a short delay to ensure the scene is fully updated
+              setTimeout(() => {
+                gameStateRef.current.player.initializeCollisions();
+                console.log('🚧 Collision system initialized for nuketown map');
+              }, 100);
+            }
           }
           
           // Load all weapon models using AssetLoader's preload system
@@ -1038,6 +1044,13 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
     // Update player (high priority - every frame)
     if (gameState.player) {
       gameState.player.update(delta);
+      
+      // Fallback collision initialization check (only for local player)
+      if (gameState.player.playerId === 'local_player' && 
+          gameState.player.simpleCollisionSystem && 
+          !gameState.player.simpleCollisionSystem.isInitialized) {
+        gameState.player.initializeCollisions();
+      }
     }
     
     // Throttle UI updates to reduce computational overhead (30 FPS instead of 60)

@@ -23,8 +23,8 @@ export class Player {
     this.isOnGround = true;
     this.isJumping = false;
     this.jumpVelocity = 0;
-    this.jumpHeight = 50; // Realistic FPS jump height
-    this.gravity = 60; // Strong gravity for snappy, realistic jumps
+    this.jumpHeight = 180; // Even higher initial jump velocity for more height
+    this.gravity = 350; // Much stronger gravity for super fast, snappy movement
     this.friction = 0.85;
     this.speed = 250; // LARGE hamster speed (33x faster!)
     this.sprintMultiplier = 2.5; // Even faster when sprinting
@@ -74,9 +74,9 @@ export class Player {
     this.networkOptimizer = new NetworkOptimizer();
     this.movementPredictor = new MovementPredictor();
     
-    // Collision system disabled for debugging
-    this.simpleCollisionSystem = null;
-    console.log('🚧 Collision system disabled - normal movement restored');
+    // Initialize collision system for wall detection
+    this.simpleCollisionSystem = new SimpleCollisionSystem(this.scene);
+    console.log('🚧 Collision system enabled - wall collision active');
     
     // Create weapon manager with AssetLoader and camera
     this.weaponManager = new WeaponManager(this.scene, this.assetLoader, this.camera);
@@ -449,7 +449,7 @@ export class Player {
       this.velocity.y = this.jumpHeight;
       this.isJumping = true;
       this.isOnGround = false;
-      console.log(`🦘 Hamster jumping! Height: ${this.jumpHeight}, Current Y: ${this.position.y.toFixed(1)}`);
+      console.log(`🦘 Hamster jumping! Initial velocity: ${this.jumpHeight}, Current Y: ${this.position.y.toFixed(1)}`);
     }
     
     // Shooting
@@ -519,8 +519,14 @@ export class Player {
       this.velocity.y = 0;
     }
     
-    // COLLISION SYSTEM TEMPORARILY DISABLED - Just apply normal movement
-    this.position.copy(newPosition);
+    // Smart collision detection - only block movement for close, legitimate walls
+    if (this.simpleCollisionSystem && this.playerId === 'local_player') {
+      const collisionCheckedPosition = this.simpleCollisionSystem.checkHorizontalMovement(this.position, newPosition);
+      this.position.copy(collisionCheckedPosition);
+    } else {
+      // For non-local players or if collision system not initialized, just apply movement
+      this.position.copy(newPosition);
+    }
     
     // Simple, reliable ground collision (always apply regardless of collision system)
     const safeGroundLevel = 40;
@@ -529,8 +535,8 @@ export class Player {
       this.velocity.y = 0;
       this.isOnGround = true;
       this.isJumping = false;
-    } else if (this.position.y <= safeGroundLevel + 1) {
-      // Close to ground - consider on ground
+    } else if (this.position.y <= safeGroundLevel + 0.5) {
+      // Very close to ground - consider on ground (tighter tolerance for snappier feel)
       this.isOnGround = true;
       if (this.velocity.y < 0) {
         this.velocity.y = 0;
