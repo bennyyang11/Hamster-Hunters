@@ -10,7 +10,14 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: [
+      "http://localhost:3000", 
+      "http://127.0.0.1:3000",
+      "https://*.railway.app",
+      "https://*.itch.io",
+      /https:\/\/.*\.up\.railway\.app$/,
+      /https:\/\/.*\.railway\.app$/
+    ],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -27,8 +34,31 @@ const gameState = {
   currentMode: null // Will be set when game starts
 };
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, '../public')));
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    uptime: process.uptime(),
+    players: players.size 
+  });
+});
+
+// Serve static files from the built client (dist folder)
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// Serve the game on root path
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
+// Catch-all handler: send back React's index.html file for any non-API routes
+app.get('*', (req, res) => {
+  // Don't interfere with API routes or socket.io
+  if (req.path.startsWith('/socket.io') || req.path.startsWith('/health')) {
+    return;
+  }
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
 
 // Socket.io connection handling
 io.on('connection', (socket) => {

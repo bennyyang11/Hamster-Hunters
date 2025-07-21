@@ -186,7 +186,7 @@ function GameScene({ selectedWeapon, selectedClass, selectedGameMode, selectedTe
       try {
         // Dynamically import socket.io-client
         const { io } = await import('socket.io-client');
-        const socket = io('http://localhost:3001');
+        const socket = io('https://hamster-hunter-production.up.railway.app');
         
         player.socket = socket;
         
